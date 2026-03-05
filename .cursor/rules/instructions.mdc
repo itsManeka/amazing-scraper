@@ -1,0 +1,157 @@
+---
+alwaysApply: true
+---
+## Estilo de Código
+
+### Geral
+- **Linguagem:** TypeScript 5.9.2+
+- **Arquitetura:** Clean Architecture + SOLID
+- **Padrões:** Clean Code, DDD onde aplicável
+- **Documentação:** JSDoc/TypeDoc para funções públicas
+- **Testes:** Cobertura mínima de **80%**
+
+### Convenções de Nomenclatura
+- **Arquivos:** PascalCase para classes/componentes, camelCase para utilitários
+- **Variáveis/Funções:** camelCase
+- **Constantes:** UPPER_SNAKE_CASE
+- **Interfaces:** PascalCase sem prefixo `I`
+- **Types:** PascalCase
+
+### TypeScript
+- Sempre use tipos explícitos em parâmetros de função
+- Evite `any`, prefira `unknown` quando necessário
+- Use type guards para validações de tipo
+- Exporte tipos e interfaces quando compartilhados
+
+---
+
+## Testes
+
+### Estrutura
+```
+tests/
+├── unit/              # Testes isolados de funções/classes
+├── integration/       # Testes com dependências reais
+└── e2e/               # Testes end-to-end
+```
+
+### Padrão de Qualidade
+- ✅ **Cobertura mínima:** 80% (lines, functions, branches)
+- ✅ **Todos os testes devem passar:** 100% sucesso
+
+### Comandos
+```bash
+npm run test                      # Executa todos os testes
+npm run test:coverage             # Gera relatório de cobertura
+npm run test:watch                # Modo watch
+```
+
+### Regras para Novos Testes
+1. Criar teste **antes** ou **junto** com funcionalidade
+2. Cobrir casos de **sucesso** e **erro**
+3. Usar **mocks** para dependências externas
+4. Validar **chamadas de repositório** (com `toHaveBeenCalledWith`)
+5. Testar **edge cases** (usuário desabilitado, produto não encontrado, etc.)
+
+---
+
+## Logging
+
+### Logger
+- **Níveis:** `info`, `warn`, `error`, `debug`
+
+### Boas Práticas
+- ✅ **Use logger em vez de `console.log`**
+- ✅ Logue **ações críticas**
+- ✅ Inclua **contexto**
+- ❌ Não logue **dados sensíveis** (tokens, senhas)
+
+---
+
+## Variáveis de Ambiente
+
+### Regras
+- ✅ Sempre use `dotenv` para carregar `.env`
+- ✅ Nunca commite `.env` (use `.env.example`)
+- ✅ Valide variáveis críticas no startup
+
+---
+
+## Boas Práticas de Código
+
+### Geral
+- ✅ **Desacoplamento:** Use interfaces (ports) para dependências
+- ✅ **Injeção de Dependência:** Sempre via construtor
+- ✅ **Funções puras:** Prefira funções sem efeitos colaterais
+- ✅ **Single Responsibility:** Uma classe/função faz uma coisa
+- ✅ **DRY:** Não repita código
+
+### Clean Architecture
+```
+domain/          → Entidades puras, sem dependências externas
+application/     → Casos de uso, interfaces (ports)
+infrastructure/  → Implementações (adapters): DB, APIs, frameworks
+```
+
+---
+
+## Fluxo de Desenvolvimento
+
+### Adicionando Nova Funcionalidade
+1. **Entender requisito:** Onde se encaixa?
+2. **Criar entidade (se necessário)**
+3. **Criar interface (port)**
+4. **Implementar adapter**
+5. **Criar caso de uso**
+6. **Adicionar testes:**
+   - Unit tests para lógica pura
+   - Integration tests para adapters
+7. **Documentar:** JSDoc + README se necessário
+8. **Validar:**
+   ```bash
+   npm run lint
+   npm run test
+   npm run build
+   ```
+
+### Corrigindo Bug
+1. **Reproduzir:** Criar teste que falha
+2. **Corrigir:** Implementar correção
+3. **Validar:** Teste deve passar + cobertura mantida
+
+---
+
+## Regras Absolutas
+
+1. ✅ **Use logger em vez de `console.log`**
+2. ✅ **Nunca commite `.env` com credenciais reais**
+5. ✅ **Use TypeScript strict mode** (configurado em `tsconfig.json`)
+6. ✅ **80%+ cobertura de testes** antes de PR
+7. ✅ **Documentar funções públicas** com JSDoc
+8. ✅ **Atualizar README.md** ao adicionar features
+9. ✅ **Seguir Clean Architecture** (domain → application → infrastructure)
+
+---
+
+## Recursos e Links
+
+### Documentação
+- [README Principal](../../README.md)
+- [Wiki](../../wiki/Home)
+
+### Tecnologias
+- [TypeScript](https://www.typescriptlang.org/)
+
+### Ferramentas
+- [Jest](https://jestjs.io/) - Testes
+- [ESLint](https://eslint.org/) - Linting
+
+---
+
+## Contribuindo
+
+### Fluxo de PR
+1. Fork do repositório
+2. Branch para feature: `git checkout -b feature/nova-funcionalidade`
+3. Commit com mensagem clara: `git commit -m 'Add: nova funcionalidade X'`
+4. Push: `git push origin feature/nova-funcionalidade`
