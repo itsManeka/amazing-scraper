@@ -127,7 +127,8 @@ export class ExtractCouponProducts {
     let currentCsrfToken = csrfToken;
     let currentCouponReferer = couponReferer;
 
-    while (true) {
+    let hasMorePages = true;
+    while (hasMorePages) {
       const payload = this.buildProductListPayload(couponInfo, currentCsrfToken, sortId, isFirstPageLoad);
       const headers: Record<string, string> = {
         'user-agent': DEFAULT_HEADERS['user-agent'],
@@ -187,7 +188,8 @@ export class ExtractCouponProducts {
       const items = parsed.viewModels?.PRODUCT_INFO_LIST ?? parsed.PRODUCT_INFO_LIST;
       if (!items || items.length === 0) {
         this.logger.info('Pagination complete — empty page received');
-        break;
+        hasMorePages = false;
+        continue;
       }
 
       for (const item of items) {
@@ -203,12 +205,14 @@ export class ExtractCouponProducts {
         this.logger.info('Pagination complete — reachBottom flag set', {
           totalSoFar: allProducts.length,
         });
-        break;
+        hasMorePages = false;
+        continue;
       }
 
       if (newSortId !== '[]' && newSortId === sortId) {
         this.logger.warn('sortId loop detected, stopping pagination', { sortId: newSortId });
-        break;
+        hasMorePages = false;
+        continue;
       }
 
       sortId = newSortId;

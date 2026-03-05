@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
 import { HttpClient, HttpResponse } from '../../application/ports/HttpClient';
@@ -24,7 +24,7 @@ export class AxiosHttpClient implements HttpClient {
         maxRedirects: 5,
         validateStatus: () => true,
         responseType: 'text',
-        transformResponse: [(data: string) => data],
+        transformResponse: [(data: string): string => data],
       }),
     );
   }

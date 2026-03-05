@@ -3,7 +3,6 @@ import { HttpClient, HttpResponse } from '../../src/application/ports/HttpClient
 import { HtmlParser } from '../../src/application/ports/HtmlParser';
 import { Logger } from '../../src/application/ports/Logger';
 import { ProductPage } from '../../src/domain/entities';
-import { ScraperError } from '../../src/domain/errors';
 
 const PRODUCT_PAGE: ProductPage = {
   asin: 'B0TEST',
