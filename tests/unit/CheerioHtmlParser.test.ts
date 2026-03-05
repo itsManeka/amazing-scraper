@@ -264,6 +264,11 @@ describe('CheerioHtmlParser', () => {
       publisher?: string;
       contributors?: { name: string; role?: string }[];
       productGroupId?: string;
+      price?: string;
+      originalPrice?: string;
+      prime?: boolean;
+      rating?: string;
+      reviewCount?: string;
     }): string {
       const availability = parts.availability
         ? `<div id="availability"><span class="a-size-medium a-color-success primary-availability-message">${parts.availability}</span></div>`
@@ -307,11 +312,104 @@ describe('CheerioHtmlParser', () => {
         ? `<script>var obj = {"productGroupID":"${parts.productGroupId}"};</script>`
         : '';
 
+      const priceHtml = parts.price
+        ? `<div id="corePrice_feature_div"><span class="a-price"><span class="a-offscreen">${parts.price}</span></span></div>`
+        : '';
+
+      const originalPriceHtml = parts.originalPrice
+        ? `<span class="a-price a-text-price"><span class="a-offscreen">${parts.originalPrice}</span></span>`
+        : '';
+
+      const primeHtml = parts.prime
+        ? '<i class="a-icon a-icon-prime"></i>'
+        : '';
+
+      const ratingHtml = parts.rating
+        ? `<span data-hook="rating-out-of-text">${parts.rating}</span>`
+        : '';
+
+      const reviewCountHtml = parts.reviewCount
+        ? `<span id="acrCustomerReviewText">${parts.reviewCount}</span>`
+        : '';
+
       return `<html><body>
         <span id="productTitle">Test Product</span>
+        ${priceHtml}${originalPriceHtml}${primeHtml}${ratingHtml}${reviewCountHtml}
         ${availability}${preorderBtn}${img}${merchant}${swatches}${pub}${byline}${pgScript}
       </body></html>`;
     }
+
+    describe('price', () => {
+      it('extracts current price from #corePrice_feature_div', () => {
+        const html = buildHtml({ price: 'R$ 49,90' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.price).toBe('R$ 49,90');
+      });
+
+      it('returns empty string when no price selector matches', () => {
+        const html = buildHtml({});
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.price).toBe('');
+      });
+
+      it('extracts original price from .a-price.a-text-price', () => {
+        const html = buildHtml({ price: 'R$ 39,90', originalPrice: 'R$ 59,90' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.originalPrice).toBe('R$ 59,90');
+      });
+
+      it('ignores originalPrice when it equals current price', () => {
+        const html = buildHtml({ price: 'R$ 39,90', originalPrice: 'R$ 39,90' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.originalPrice).toBe('');
+      });
+
+      it('returns empty originalPrice when section is absent', () => {
+        const html = buildHtml({ price: 'R$ 39,90' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.originalPrice).toBe('');
+      });
+    });
+
+    describe('prime', () => {
+      it('returns true when .a-icon-prime is present', () => {
+        const html = buildHtml({ prime: true });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.prime).toBe(true);
+      });
+
+      it('returns false when no prime indicator exists', () => {
+        const html = buildHtml({});
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.prime).toBe(false);
+      });
+    });
+
+    describe('rating and reviewCount', () => {
+      it('extracts rating from data-hook rating text', () => {
+        const html = buildHtml({ rating: '4,5 de 5 estrelas' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.rating).toBe(4.5);
+      });
+
+      it('returns 0 rating when no rating element exists', () => {
+        const html = buildHtml({});
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.rating).toBe(0);
+      });
+
+      it('extracts reviewCount from #acrCustomerReviewText', () => {
+        const html = buildHtml({ reviewCount: '1.234 avaliações' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.reviewCount).toBe(1234);
+      });
+
+      it('returns 0 reviewCount when no review element exists', () => {
+        const html = buildHtml({});
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.reviewCount).toBe(0);
+      });
+    });
 
     describe('availability — inStock / isPreOrder', () => {
       it('returns inStock: true when availability text is "Em estoque"', () => {
