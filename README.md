@@ -2,7 +2,7 @@
 
 [![npm version](https://badge.fury.io/js/amazing-scraper.svg)](https://badge.fury.io/js/amazing-scraper)
 [![Build Status](https://github.com/itsManeka/amazing-scraper/workflows/Build%2C%20Test%20%26%20Publish/badge.svg)](https://github.com/itsManeka/amazing-scraper/actions)
-[![codecov](https://codecov.io/github/itsManeka/amazing-scraper/graph/badge.svg?token=YRAC35KTCZ)](https://codecov.io/github/itsManeka/amazing-scraper)
+[![codecov](https://codecov.io/github/itsManeka/amazing-scraper/graph/badge.svg?token=02QHN94WKP)](https://codecov.io/github/itsManeka/amazing-scraper)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 TypeScript library for extracting product listings from Amazon Brasil coupon promotions.
