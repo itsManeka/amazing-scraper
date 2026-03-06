@@ -346,7 +346,41 @@ describe('CheerioHtmlParser', () => {
         expect(result.price).toBe('R$ 49,90');
       });
 
-      it('returns empty string when no price selector matches', () => {
+      it('reconstructs price from visible sub-elements when .a-offscreen is empty', () => {
+        const html = `<html><body>
+          <span id="productTitle">Test</span>
+          <span class="a-price priceToPay">
+            <span class="a-offscreen"> </span>
+            <span aria-hidden="true">
+              <span class="a-price-symbol">R$</span>
+              <span class="a-price-whole">104<span class="a-price-decimal">,</span></span>
+              <span class="a-price-fraction">90</span>
+            </span>
+          </span>
+        </body></html>`;
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.price).toBe('R$104,90');
+      });
+
+      it('reconstructs price from corePriceDisplay container as fallback', () => {
+        const html = `<html><body>
+          <span id="productTitle">Test</span>
+          <div id="corePriceDisplay_desktop_feature_div">
+            <span class="a-price" data-a-color="base">
+              <span class="a-offscreen"> </span>
+              <span aria-hidden="true">
+                <span class="a-price-symbol">R$</span>
+                <span class="a-price-whole">59<span class="a-price-decimal">,</span></span>
+                <span class="a-price-fraction">99</span>
+              </span>
+            </span>
+          </div>
+        </body></html>`;
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.price).toBe('R$59,99');
+      });
+
+      it('returns empty string when no price selector matches and no sub-elements exist', () => {
         const html = buildHtml({});
         const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
         expect(result.price).toBe('');
@@ -591,10 +625,35 @@ describe('CheerioHtmlParser', () => {
     });
 
     describe('productGroup', () => {
-      it('extracts productGroupID from script block', () => {
+      it('maps known productGroupID to PA API-style label', () => {
         const html = buildHtml({ productGroupId: 'book_display_on_website' });
         const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
-        expect(result.productGroup).toBe('book_display_on_website');
+        expect(result.productGroup).toBe('Book');
+      });
+
+      it.each([
+        ['ce_display_on_website', 'Consumer Electronics'],
+        ['dvd_display_on_website', 'DVD'],
+        ['toy_display_on_website', 'Toy'],
+        ['video_games_display_on_website', 'Video Games'],
+        ['wireless_display_on_website', 'Wireless'],
+        ['pet_products_display_on_website', 'Pet Products'],
+      ])('maps %s to %s', (raw, expected) => {
+        const html = buildHtml({ productGroupId: raw });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.productGroup).toBe(expected);
+      });
+
+      it('applies smart fallback for unmapped values with _display_on_website suffix', () => {
+        const html = buildHtml({ productGroupId: 'new_gadget_display_on_website' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.productGroup).toBe('New Gadget');
+      });
+
+      it('title-cases unmapped values without _display_on_website suffix', () => {
+        const html = buildHtml({ productGroupId: 'some_category' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.productGroup).toBe('Some Category');
       });
 
       it('returns undefined when productGroupID is absent', () => {
@@ -630,7 +689,7 @@ describe('CheerioHtmlParser', () => {
         format: 'Capa Comum',
         publisher: 'PANINI (CT)',
         contributors: ['Aaron: Jason (Autor)'],
-        productGroup: 'book_display_on_website',
+        productGroup: 'Book',
       });
     });
   });
@@ -656,6 +715,133 @@ describe('CheerioHtmlParser', () => {
       `;
       const result = parser.extractCouponInfo(html);
       expect(result?.promotionId).toBe('KWORD');
+    });
+  });
+
+  describe('extractCouponMetadata', () => {
+    it('extracts title, description and expiration — "Expira em" format', () => {
+      const html = `
+        <html><body>
+          <div id="promotionTitle"><h1><span>Só no app: 20% off em itens Brinox</span></h1></div>
+          <div id="promotionSchedule"><span>Expira em: domingo 15 de março de 2026</span></div>
+        </body></html>
+      `;
+      const result = parser.extractCouponMetadata(html);
+      expect(result.title).toBe('Só no app: 20% off em itens Brinox');
+      expect(result.description).toBe('Expira em: domingo 15 de março de 2026');
+      expect(result.expiresAt).toBe('15/03/2026');
+    });
+
+    it('extracts end date from "De ... até ..." format', () => {
+      const html = `
+        <html><body>
+          <div id="promotionTitle"><h1>Só no app - 25% off em Livros</h1></div>
+          <div id="promotionSchedule"><span>De segunda-feira 2 de março de 2026 até domingo 15 de março de 2026</span></div>
+        </body></html>
+      `;
+      const result = parser.extractCouponMetadata(html);
+      expect(result.title).toBe('Só no app - 25% off em Livros');
+      expect(result.description).toBe('De segunda-feira 2 de março de 2026 até domingo 15 de março de 2026');
+      expect(result.expiresAt).toBe('15/03/2026');
+    });
+
+    it('extracts end date from "De ... às HH:MM BRT até ..." format', () => {
+      const html = `
+        <html><body>
+          <div id="promotionTitle"><h1>Exclusivo Prime: 40% off no mais barato levando 2 Livros</h1></div>
+          <div id="promotionSchedule"><span>De quinta-feira 5 de março de 2026 às 14:30 BRT até quinta-feira 12 de março de 2026</span></div>
+        </body></html>
+      `;
+      const result = parser.extractCouponMetadata(html);
+      expect(result.title).toBe('Exclusivo Prime: 40% off no mais barato levando 2 Livros');
+      expect(result.description).toBe('De quinta-feira 5 de março de 2026 às 14:30 BRT até quinta-feira 12 de março de 2026');
+      expect(result.expiresAt).toBe('12/03/2026');
+    });
+
+    it('returns all null when no metadata elements are found', () => {
+      const html = '<html><body><div>No metadata here</div></body></html>';
+      const result = parser.extractCouponMetadata(html);
+      expect(result.title).toBeNull();
+      expect(result.description).toBeNull();
+      expect(result.expiresAt).toBeNull();
+    });
+
+    it('returns null for description and expiresAt when only title is present', () => {
+      const html = `
+        <html><body>
+          <div id="promotionTitle"><h1>Cupom valido</h1></div>
+        </body></html>
+      `;
+      const result = parser.extractCouponMetadata(html);
+      expect(result.title).toBe('Cupom valido');
+      expect(result.description).toBeNull();
+      expect(result.expiresAt).toBeNull();
+    });
+
+    it('extracts title from #promotionTitle without h1', () => {
+      const html = `
+        <html><body>
+          <div id="promotionTitle">Titulo sem h1</div>
+        </body></html>
+      `;
+      const result = parser.extractCouponMetadata(html);
+      expect(result.title).toBe('Titulo sem h1');
+    });
+
+    it('returns raw text as expiresAt when format is unrecognized', () => {
+      const html = `
+        <html><body>
+          <div id="promotionSchedule">Valido por tempo limitado</div>
+        </body></html>
+      `;
+      const result = parser.extractCouponMetadata(html);
+      expect(result.description).toBe('Valido por tempo limitado');
+      expect(result.expiresAt).toBe('Valido por tempo limitado');
+    });
+
+    it('matches real Amazon PSP page structure (Brinox coupon)', () => {
+      const html = `
+        <html><body>
+          <div id="topBannerContainer" class="textAlignCenter" role="group" aria-label="Título da promoção">
+            <div class="alignCenter" style="width: 90%; color: #232F3E;">
+              <div id="promotionTitle" style="padding-top: 8px !important;">
+                <h1><span class="a-size-extra-large a-text-bold">Só no app: 20% off em itens Brinox</span></h1>
+              </div>
+              <div id="promotionSchedule" class="paddingTop12 paddingBottom16">
+                <span class="a-size-base inlineBlock">Expira em: domingo 15 de março de 2026</span>
+              </div>
+            </div>
+          </div>
+        </body></html>
+      `;
+      const result = parser.extractCouponMetadata(html);
+      expect(result.title).toBe('Só no app: 20% off em itens Brinox');
+      expect(result.description).toBe('Expira em: domingo 15 de março de 2026');
+      expect(result.expiresAt).toBe('15/03/2026');
+    });
+
+    it('matches real Amazon PSP page structure (Prime exclusive coupon)', () => {
+      const html = `
+        <html><body>
+          <div id="topBannerContainer" class="textAlignCenter" role="group" style="background: #303333 !important" aria-label="Título da promoção">
+            <div id="bannerId" class="alignCenter paddingTop16 marginTop1" style="color: #1a98ff">
+              <h1><span class="a-size-extra-large a-text-bold">Exclusivo para membros Prime</span></h1>
+            </div>
+            <div class="alignCenter" style="width: 90%; color: #FFFFFF;">
+              <div id="promotionTitle" style="padding-top: 8px !important;">
+                <h1><span class="a-size-extra-large a-text-bold">Exclusivo Prime: 40% off no mais barato levando 2 Livros</span></h1>
+              </div>
+              <div id="promotionSchedule" class="paddingTop12 paddingBottom16">
+                <span class="a-size-base inlineBlock">De quinta-feira 5 de março de 2026 às 14:30 BRT até quinta-feira 12 de março de 2026</span>
+              </div>
+            </div>
+          </div>
+        </body></html>
+      `;
+      const result = parser.extractCouponMetadata(html);
+      expect(result.title).toBe('Exclusivo Prime: 40% off no mais barato levando 2 Livros');
+      expect(result.description).toBe('De quinta-feira 5 de março de 2026 às 14:30 BRT até quinta-feira 12 de março de 2026');
+      expect(result.expiresAt).toBe('12/03/2026');
     });
   });
 });

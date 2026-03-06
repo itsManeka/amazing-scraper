@@ -2,7 +2,12 @@ import { FetchProduct } from '../../src/application/use-cases/FetchProduct';
 import { HttpClient, HttpResponse } from '../../src/application/ports/HttpClient';
 import { HtmlParser } from '../../src/application/ports/HtmlParser';
 import { Logger } from '../../src/application/ports/Logger';
+import { RetryPolicy, RetryDecision } from '../../src/application/ports/RetryPolicy';
+import { UserAgentProvider } from '../../src/application/ports/UserAgentProvider';
 import { ProductPage } from '../../src/domain/entities';
+import { ScraperError } from '../../src/domain/errors';
+
+const TEST_UA = 'Mozilla/5.0 TestBrowser/1.0';
 
 const PRODUCT_PAGE: ProductPage = {
   asin: 'B0TEST',
@@ -22,7 +27,7 @@ const PRODUCT_PAGE: ProductPage = {
   format: 'Capa dura',
   publisher: 'Editora Exemplo',
   contributors: ['Autor Exemplo (Autor)'],
-  productGroup: 'book_display_on_website',
+  productGroup: 'Book',
 };
 
 function ok(data: string): HttpResponse {
@@ -38,6 +43,7 @@ function createMocks() {
   const htmlParser: jest.Mocked<HtmlParser> = {
     extractCouponInfo: jest.fn(),
     extractCsrfToken: jest.fn(),
+    extractCouponMetadata: jest.fn(),
     extractProductInfo: jest.fn(),
   };
 
@@ -47,11 +53,29 @@ function createMocks() {
     error: jest.fn(),
   };
 
-  return { httpClient, htmlParser, logger };
+  const userAgentProvider: jest.Mocked<UserAgentProvider> = {
+    get: jest.fn().mockReturnValue(TEST_UA),
+  };
+
+  const retryPolicy: jest.Mocked<RetryPolicy> = {
+    evaluate: jest.fn().mockReturnValue({ shouldRetry: false, delayMs: 0 } as RetryDecision),
+  };
+
+  return { httpClient, htmlParser, logger, userAgentProvider, retryPolicy };
 }
 
-function createUseCase(mocks: ReturnType<typeof createMocks>) {
-  const useCase = new FetchProduct(mocks.httpClient, mocks.htmlParser, mocks.logger);
+function createUseCase(
+  mocks: ReturnType<typeof createMocks>,
+  onBlocked?: (error: ScraperError) => Promise<void>,
+) {
+  const useCase = new FetchProduct(
+    mocks.httpClient,
+    mocks.htmlParser,
+    mocks.logger,
+    mocks.userAgentProvider,
+    mocks.retryPolicy,
+    onBlocked,
+  );
   jest.spyOn(useCase as never, 'delay' as never).mockResolvedValue(undefined as never);
   return useCase;
 }
@@ -71,13 +95,29 @@ describe('FetchProduct', () => {
       expect(mocks.httpClient.get).toHaveBeenCalledTimes(1);
       expect(mocks.httpClient.get).toHaveBeenCalledWith(
         'https://www.amazon.com.br/dp/B0TEST',
-        expect.objectContaining({ 'user-agent': expect.any(String) }),
+        expect.objectContaining({ 'user-agent': TEST_UA }),
       );
       expect(mocks.htmlParser.extractProductInfo).toHaveBeenCalledWith(
         '<html>product</html>',
         'B0TEST',
         'https://www.amazon.com.br/dp/B0TEST',
         mocks.logger,
+      );
+    });
+
+    it('uses the UA from userAgentProvider', async () => {
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>product</html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      await useCase.execute('B0TEST');
+
+      expect(mocks.userAgentProvider.get).toHaveBeenCalledTimes(1);
+      expect(mocks.httpClient.get).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ 'user-agent': TEST_UA }),
       );
     });
 
@@ -121,24 +161,13 @@ describe('FetchProduct', () => {
     });
   });
 
-  describe('blocking — status 503', () => {
-    it('throws ScraperError "blocked" on 503', async () => {
+  describe('retry via RetryPolicy — 403', () => {
+    it('retries on 403 when retryPolicy says to retry, then succeeds', async () => {
       const mocks = createMocks();
-      const useCase = createUseCase(mocks);
+      mocks.retryPolicy.evaluate
+        .mockReturnValueOnce({ shouldRetry: true, delayMs: 2000 })
+        .mockReturnValueOnce({ shouldRetry: false, delayMs: 0 });
 
-      mocks.httpClient.get.mockResolvedValueOnce({ status: 503, data: '' });
-
-      await expect(useCase.execute('B0TEST')).rejects.toMatchObject({
-        code: 'blocked',
-        context: expect.objectContaining({ status: 503 }),
-      });
-      expect(mocks.htmlParser.extractProductInfo).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('blocking — status 403', () => {
-    it('retries once on 403 and succeeds on second attempt', async () => {
-      const mocks = createMocks();
       const useCase = createUseCase(mocks);
 
       mocks.httpClient.get
@@ -150,30 +179,116 @@ describe('FetchProduct', () => {
 
       expect(result).toEqual(PRODUCT_PAGE);
       expect(mocks.httpClient.get).toHaveBeenCalledTimes(2);
-      expect(mocks.logger.warn).toHaveBeenCalledWith(
-        '403 on product page, retrying in 5s',
-        expect.any(Object),
+      expect(mocks.retryPolicy.evaluate).toHaveBeenCalledWith(
+        expect.objectContaining({ attempt: 0, statusCode: 403, errorType: 'http' }),
       );
     });
 
-    it('throws ScraperError "blocked" when both 403 attempts fail', async () => {
+    it('throws blocked with retryable: false when retries exhausted on 403', async () => {
       const mocks = createMocks();
+      mocks.retryPolicy.evaluate.mockReturnValue({ shouldRetry: false, delayMs: 0 });
+
       const useCase = createUseCase(mocks);
 
-      mocks.httpClient.get
-        .mockResolvedValueOnce({ status: 403, data: '' })
-        .mockResolvedValueOnce({ status: 403, data: '' });
+      mocks.httpClient.get.mockResolvedValueOnce({ status: 403, data: '' });
 
-      await expect(useCase.execute('B0TEST')).rejects.toMatchObject({
-        code: 'blocked',
-        context: expect.objectContaining({ status: 403 }),
-      });
-      expect(mocks.httpClient.get).toHaveBeenCalledTimes(2);
+      try {
+        await useCase.execute('B0TEST');
+        fail('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ScraperError);
+        const se = err as ScraperError;
+        expect(se.code).toBe('blocked');
+        expect(se.context).toEqual(expect.objectContaining({ status: 403 }));
+        expect(se.retryable).toBe(false);
+      }
     });
   });
 
-  describe('blocking — CAPTCHA', () => {
-    it('throws ScraperError "blocked" when CAPTCHA is detected in 200 response', async () => {
+  describe('retry via RetryPolicy — 503', () => {
+    it('retries on 503 when retryPolicy says to retry, then succeeds', async () => {
+      const mocks = createMocks();
+      mocks.retryPolicy.evaluate
+        .mockReturnValueOnce({ shouldRetry: true, delayMs: 2000 });
+
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get
+        .mockResolvedValueOnce({ status: 503, data: '' })
+        .mockResolvedValueOnce(ok('<html>product</html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result).toEqual(PRODUCT_PAGE);
+      expect(mocks.retryPolicy.evaluate).toHaveBeenCalledWith(
+        expect.objectContaining({ statusCode: 503, errorType: 'http' }),
+      );
+    });
+
+    it('throws blocked with retryable: true and suggestedCooldownMs when retries exhausted on 503', async () => {
+      const mocks = createMocks();
+      mocks.retryPolicy.evaluate.mockReturnValue({ shouldRetry: false, delayMs: 0 });
+
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get.mockResolvedValueOnce({ status: 503, data: '' });
+
+      try {
+        await useCase.execute('B0TEST');
+        fail('Should have thrown');
+      } catch (err) {
+        const se = err as ScraperError;
+        expect(se.code).toBe('blocked');
+        expect(se.retryable).toBe(true);
+        expect(se.suggestedCooldownMs).toBe(30_000);
+      }
+    });
+  });
+
+  describe('retry via RetryPolicy — network error', () => {
+    it('retries on network error when retryPolicy says to retry', async () => {
+      const mocks = createMocks();
+      mocks.retryPolicy.evaluate
+        .mockReturnValueOnce({ shouldRetry: true, delayMs: 2000 });
+
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get
+        .mockRejectedValueOnce(new Error('ECONNRESET'))
+        .mockResolvedValueOnce(ok('<html>product</html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result).toEqual(PRODUCT_PAGE);
+      expect(mocks.retryPolicy.evaluate).toHaveBeenCalledWith(
+        expect.objectContaining({ statusCode: 0, errorType: 'network' }),
+      );
+    });
+
+    it('throws blocked when network retries exhausted', async () => {
+      const mocks = createMocks();
+      mocks.retryPolicy.evaluate.mockReturnValue({ shouldRetry: false, delayMs: 0 });
+
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get.mockRejectedValueOnce(new Error('ECONNRESET'));
+
+      try {
+        await useCase.execute('B0TEST');
+        fail('Should have thrown');
+      } catch (err) {
+        const se = err as ScraperError;
+        expect(se.code).toBe('blocked');
+        expect(se.retryable).toBe(true);
+        expect(se.suggestedCooldownMs).toBe(30_000);
+      }
+    });
+  });
+
+  describe('CAPTCHA detection', () => {
+    it('throws blocked with retryable: true and suggestedCooldownMs: 120000 on CAPTCHA', async () => {
       const mocks = createMocks();
       const useCase = createUseCase(mocks);
 
@@ -181,14 +296,20 @@ describe('FetchProduct', () => {
         ok('<html>Type the characters you see in this image</html>'),
       );
 
-      await expect(useCase.execute('B0TEST')).rejects.toMatchObject({
-        code: 'blocked',
-        context: expect.objectContaining({ reason: 'CAPTCHA detected' }),
-      });
+      try {
+        await useCase.execute('B0TEST');
+        fail('Should have thrown');
+      } catch (err) {
+        const se = err as ScraperError;
+        expect(se.code).toBe('blocked');
+        expect(se.retryable).toBe(true);
+        expect(se.suggestedCooldownMs).toBe(120_000);
+        expect(se.context).toEqual(expect.objectContaining({ reason: 'CAPTCHA detected' }));
+      }
       expect(mocks.htmlParser.extractProductInfo).not.toHaveBeenCalled();
     });
 
-    it('throws ScraperError "blocked" on validateCaptcha marker', async () => {
+    it('throws on validateCaptcha marker', async () => {
       const mocks = createMocks();
       const useCase = createUseCase(mocks);
 
@@ -197,6 +318,80 @@ describe('FetchProduct', () => {
       );
 
       await expect(useCase.execute('B0TEST')).rejects.toMatchObject({ code: 'blocked' });
+    });
+  });
+
+  describe('onBlocked callback', () => {
+    it('calls onBlocked before throwing on CAPTCHA', async () => {
+      const mocks = createMocks();
+      const onBlocked = jest.fn().mockResolvedValue(undefined);
+      const useCase = createUseCase(mocks, onBlocked);
+
+      mocks.httpClient.get.mockResolvedValueOnce(
+        ok('<html>Type the characters you see in this image</html>'),
+      );
+
+      await expect(useCase.execute('B0TEST')).rejects.toMatchObject({ code: 'blocked' });
+      expect(onBlocked).toHaveBeenCalledTimes(1);
+      expect(onBlocked).toHaveBeenCalledWith(expect.objectContaining({ code: 'blocked' }));
+    });
+
+    it('calls onBlocked before throwing on 403 after retries exhausted', async () => {
+      const mocks = createMocks();
+      const onBlocked = jest.fn().mockResolvedValue(undefined);
+      mocks.retryPolicy.evaluate.mockReturnValue({ shouldRetry: false, delayMs: 0 });
+
+      const useCase = createUseCase(mocks, onBlocked);
+
+      mocks.httpClient.get.mockResolvedValueOnce({ status: 403, data: '' });
+
+      await expect(useCase.execute('B0TEST')).rejects.toMatchObject({ code: 'blocked' });
+      expect(onBlocked).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls onBlocked before throwing on 503 after retries exhausted', async () => {
+      const mocks = createMocks();
+      const onBlocked = jest.fn().mockResolvedValue(undefined);
+      mocks.retryPolicy.evaluate.mockReturnValue({ shouldRetry: false, delayMs: 0 });
+
+      const useCase = createUseCase(mocks, onBlocked);
+
+      mocks.httpClient.get.mockResolvedValueOnce({ status: 503, data: '' });
+
+      await expect(useCase.execute('B0TEST')).rejects.toMatchObject({ code: 'blocked' });
+      expect(onBlocked).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores exceptions thrown by onBlocked callback', async () => {
+      const mocks = createMocks();
+      const onBlocked = jest.fn().mockRejectedValue(new Error('callback crash'));
+      mocks.retryPolicy.evaluate.mockReturnValue({ shouldRetry: false, delayMs: 0 });
+
+      const useCase = createUseCase(mocks, onBlocked);
+
+      mocks.httpClient.get.mockResolvedValueOnce({ status: 503, data: '' });
+
+      try {
+        await useCase.execute('B0TEST');
+        fail('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ScraperError);
+        expect((err as ScraperError).code).toBe('blocked');
+      }
+      expect(onBlocked).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call onBlocked on success', async () => {
+      const mocks = createMocks();
+      const onBlocked = jest.fn().mockResolvedValue(undefined);
+      const useCase = createUseCase(mocks, onBlocked);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>product</html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      await useCase.execute('B0TEST');
+
+      expect(onBlocked).not.toHaveBeenCalled();
     });
   });
 

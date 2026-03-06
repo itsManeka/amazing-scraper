@@ -1,3 +1,4 @@
+import { CouponMetadata } from './CouponMetadata';
 import { Product } from './Product';
 
 /**
@@ -8,6 +9,8 @@ export interface CouponResult {
   sourceAsin: string;
   totalProducts: number;
   products: Product[];
+  /** Coupon promotion metadata (title, description, expiration). */
+  metadata?: CouponMetadata;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { CouponInfo, ProductPage } from '../../domain/entities';
+import { CouponInfo, CouponMetadata, ProductPage } from '../../domain/entities';
 import { Logger } from './Logger';
 
 /**
@@ -16,6 +16,12 @@ export interface HtmlParser {
    * Returns `null` when no token is found.
    */
   extractCsrfToken(html: string): string | null;
+
+  /**
+   * Extracts coupon metadata (title, description, expiration) from a coupon promotion page.
+   * Always returns a `CouponMetadata` object; absent fields are `null`.
+   */
+  extractCouponMetadata(html: string): CouponMetadata;
 
   /**
    * Extracts structured product data from a product detail page.

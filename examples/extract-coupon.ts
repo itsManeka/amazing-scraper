@@ -30,11 +30,14 @@ async function main(): Promise<void> {
 
   const result = await scraper.extractCouponProducts(page.couponInfo);
 
-  const { promotionId, sourceAsin, totalProducts, products } = result;
+  const { promotionId, sourceAsin, totalProducts, products, metadata } = result;
 
   process.stdout.write(`Cupom encontrado!\n`);
   process.stdout.write(`  Promotion ID : ${promotionId}\n`);
   process.stdout.write(`  ASIN origem  : ${sourceAsin}\n`);
+  process.stdout.write(`  Título       : ${metadata?.title ?? '(não disponível)'}\n`);
+  process.stdout.write(`  Descrição    : ${metadata?.description ?? '(não disponível)'}\n`);
+  process.stdout.write(`  Expiração    : ${metadata?.expiresAt ?? '(não disponível)'}\n`);
   process.stdout.write(`  Total produtos: ${totalProducts}\n\n`);
 
   process.stdout.write('--- Produtos participantes ---\n\n');

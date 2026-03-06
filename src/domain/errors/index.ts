@@ -1,1 +1,1 @@
-export { ScraperError, ScraperErrorCode } from './ScraperError';
+export { ScraperError, ScraperErrorCode, ScraperErrorOptions } from './ScraperError';

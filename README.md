@@ -29,6 +29,7 @@ console.log(page.title, page.price, page.inStock, page.format);
 // Step 2: Extract coupon products (only if coupon exists)
 if (page.hasCoupon && page.couponInfo) {
   const result = await scraper.extractCouponProducts(page.couponInfo);
+  console.log(`${result.metadata?.title} — expires: ${result.metadata?.expiresAt}`);
   console.log(`Found ${result.totalProducts} products`);
   for (const product of result.products) {
     console.log(`${product.title} — ${product.price}`);
@@ -48,6 +49,11 @@ Creates a scraper instance.
 |--------|------|---------|-------------|
 | `delayMs` | `{ min: number; max: number }` | `{ min: 1000, max: 2000 }` | Random delay range (ms) between HTTP requests |
 | `logger` | `Logger` | `ConsoleLogger` | Custom logger implementation |
+| `paginationLimits` | `PaginationLimits` | `{ maxProducts: 1000, maxPages: 500 }` | Safety limits to prevent runaway extraction |
+| `userAgentProvider` | `UserAgentProvider` | `RotatingUserAgentProvider` | Custom User-Agent provider |
+| `retryPolicy` | `RetryPolicy` | `ExponentialBackoffRetry` | Custom retry policy for transient errors |
+| `onBlocked` | `(error: ScraperError) => Promise<void>` | — | Callback invoked before throwing on block/CAPTCHA errors |
+| `httpClient` | `HttpClient` | `AxiosHttpClient` | Custom HTTP client with cookie jar |
 
 Returns an `AmazonCouponScraper` with the following methods:
 
@@ -92,6 +98,19 @@ Returns `CouponResult`:
   sourceAsin: string;
   totalProducts: number;
   products: Product[];
+  metadata?: CouponMetadata;
+}
+```
+
+### `CouponMetadata`
+
+Metadata extracted from the coupon promotion page. All fields are nullable because the page may not always display them.
+
+```typescript
+interface CouponMetadata {
+  title: string | null;        // e.g. "Só no app: 20% off em itens Brinox"
+  description: string | null;  // e.g. "Exclusivo para membros Prime"
+  expiresAt: string | null;    // e.g. "domingo 15 de março de 2026"
 }
 ```
 
@@ -155,7 +174,7 @@ const scraper = createScraper({ logger: myLogger });
 ```
 src/
   domain/
-    entities/          Product, CouponInfo, CouponResult
+    entities/          Product, CouponInfo, CouponResult, CouponMetadata
     errors/            ScraperError
   application/
     ports/             HttpClient, HtmlParser, Logger
@@ -177,9 +196,9 @@ The library follows Clean Architecture: the domain has no external dependencies,
 3. **Return `ProductPage`** — includes `couponInfo` when a coupon is detected
 
 ### `extractCouponProducts` (Step 2)
-1. **Fetch coupon page** — GET the coupon URL (built from `CouponInfo`), extract anti-CSRF token (3 fallback regex strategies)
-2. **Paginate products** — POST to `/promotion/psp/productInfoList` with form-encoded payload; follows `sortId` for pagination with loop-guard
-3. **Return structured result** — maps raw API items to `Product[]`
+1. **Fetch coupon page** — GET the coupon URL (built from `CouponInfo`), extract anti-CSRF token and coupon metadata (title, description, expiration)
+2. **Paginate products** — POST to `/promotion/psp/productInfoList` with form-encoded payload; follows `sortId` for pagination with loop-guard and ASIN deduplication
+3. **Return structured result** — maps raw API items to `Product[]`, includes `CouponMetadata`
 
 Built-in protections:
 - Random delay between requests (configurable)
@@ -187,6 +206,8 @@ Built-in protections:
 - 403 retry with 5s backoff on initial page
 - Session refresh on 403 during pagination
 - Infinite pagination loop guard via `sortId` comparison
+- ASIN deduplication across pages (stops on API cycling)
+- Configurable `maxProducts` (default: 1000) and `maxPages` (default: 500) limits
 
 ## Testing
 

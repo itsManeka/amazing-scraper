@@ -1,7 +1,33 @@
 import * as cheerio from 'cheerio';
 import { HtmlParser } from '../../application/ports/HtmlParser';
 import { Logger } from '../../application/ports/Logger';
-import { CouponInfo, ProductPage } from '../../domain/entities';
+import { CouponInfo, CouponMetadata, ProductPage } from '../../domain/entities';
+
+/** Maps raw `productGroupID` values to PA API-style `ProductGroup.DisplayValue` labels. */
+const PRODUCT_GROUP_LABELS: Record<string, string> = {
+  book_display_on_website: 'Book',
+  ce_display_on_website: 'Consumer Electronics',
+  dvd_display_on_website: 'DVD',
+  toy_display_on_website: 'Toy',
+  kitchen_display_on_website: 'Kitchen',
+  video_games_display_on_website: 'Video Games',
+  wireless_display_on_website: 'Wireless',
+  baby_product_display_on_website: 'Baby Product',
+  shoes_display_on_website: 'Shoes',
+  apparel_display_on_website: 'Apparel',
+  beauty_display_on_website: 'Beauty',
+  grocery_display_on_website: 'Grocery',
+  pet_products_display_on_website: 'Pet Products',
+  office_products_display_on_website: 'Office Product',
+  sports_display_on_website: 'Sports',
+  automotive_display_on_website: 'Automotive',
+  home_display_on_website: 'Home',
+  home_improvement_display_on_website: 'Home Improvement',
+  digital_ebook_purchase_display_on_website: 'Digital Ebook Purchase',
+  software_display_on_website: 'Software',
+  musical_instruments_display_on_website: 'Musical Instruments',
+  audible_display_on_website: 'Audible',
+};
 
 /**
  * Cheerio-based parser for extracting coupon data and CSRF tokens from Amazon HTML.
@@ -105,6 +131,83 @@ export class CheerioHtmlParser implements HtmlParser {
   }
 
   /**
+   * Extracts coupon metadata (title, description, expiration) from a coupon promotion page.
+   * Selectors target the Amazon PSP (Promotion Shopping Page) layout.
+   */
+  extractCouponMetadata(html: string): CouponMetadata {
+    const $ = cheerio.load(html);
+
+    const title = this.extractCouponTitle($);
+    const description = this.extractCouponDescription($);
+    const expiresAt = this.extractCouponExpiration($);
+
+    return { title, description, expiresAt };
+  }
+
+  private extractCouponTitle($: cheerio.CheerioAPI): string | null {
+    const selectors = [
+      '#promotionTitle h1',
+      '#promotionTitle',
+    ];
+
+    for (const sel of selectors) {
+      const text = $(sel).text().trim();
+      if (text) return text;
+    }
+
+    return null;
+  }
+
+  private extractCouponDescription($: cheerio.CheerioAPI): string | null {
+    const text = $('#promotionSchedule').text().trim();
+    return text || null;
+  }
+
+  private extractCouponExpiration($: cheerio.CheerioAPI): string | null {
+    const rawText = $('#promotionSchedule').text().trim();
+    if (!rawText) return null;
+    return this.parseExpirationText(rawText);
+  }
+
+  private static readonly MONTH_MAP: Record<string, string> = {
+    'janeiro': '01', 'fevereiro': '02', 'março': '03', 'abril': '04',
+    'maio': '05', 'junho': '06', 'julho': '07', 'agosto': '08',
+    'setembro': '09', 'outubro': '10', 'novembro': '11', 'dezembro': '12',
+  };
+
+  /**
+   * Normalises expiration text from the Amazon PSP page into dd/MM/yyyy.
+   * Extracts the end date from formats like:
+   *   - "Expira em: domingo 15 de março de 2026"
+   *   - "De terça-feira 3 de março de 2026 até domingo 15 de março de 2026"
+   *   - "De quinta-feira 5 de março de 2026 às 14:30 BRT até quinta-feira 12 de março de 2026"
+   * Falls back to the raw text when the pattern is not recognised.
+   */
+  private parseExpirationText(text: string): string {
+    const ateMatch = text.match(/até\s+(.+?)$/i);
+    const expiraMatch = text.match(/Expira\s+em:\s*(.+?)$/i);
+    const dateFragment = ateMatch?.[1]?.trim() ?? expiraMatch?.[1]?.trim() ?? text;
+
+    return this.formatPtBrDate(dateFragment) ?? dateFragment;
+  }
+
+  /**
+   * Converts a pt-BR date fragment like "domingo 15 de março de 2026" into "15/03/2026".
+   * Returns null when the fragment doesn't match the expected pattern.
+   */
+  private formatPtBrDate(fragment: string): string | null {
+    const m = fragment.match(/(\d{1,2})\s+de\s+(\S+)\s+de\s+(\d{4})/i);
+    if (!m) return null;
+
+    const day = m[1].padStart(2, '0');
+    const month = CheerioHtmlParser.MONTH_MAP[m[2].toLowerCase()];
+    const year = m[3];
+
+    if (!month) return null;
+    return `${day}/${month}/${year}`;
+  }
+
+  /**
    * Extracts structured product data from an Amazon product detail page.
    * Uses multiple selector fallbacks for each field to handle page layout variations.
    */
@@ -150,7 +253,6 @@ export class CheerioHtmlParser implements HtmlParser {
   }
 
   private extractPrices($: cheerio.CheerioAPI): { price: string; originalPrice: string } {
-    // Current price: try common selectors in priority order
     const priceSelectors = [
       '#priceblock_ourprice',
       '#priceblock_dealprice',
@@ -158,6 +260,7 @@ export class CheerioHtmlParser implements HtmlParser {
       '.a-price[data-a-color="price"] .a-offscreen',
       '.priceToPay .a-offscreen',
       '#corePrice_feature_div .a-price .a-offscreen',
+      '#corePriceDisplay_desktop_feature_div .a-price:not(.a-text-price) .a-offscreen',
     ];
 
     let price = '';
@@ -169,7 +272,14 @@ export class CheerioHtmlParser implements HtmlParser {
       }
     }
 
-    // Original (was) price: typically the struck-through price
+    // Fallback: reconstruct from visible sub-elements when .a-offscreen is empty
+    if (!price) {
+      price = this.reconstructPrice($, [
+        '.priceToPay',
+        '#corePriceDisplay_desktop_feature_div .a-price:not(.a-text-price)',
+      ]);
+    }
+
     const originalPriceSelectors = [
       '.a-price.a-text-price .a-offscreen',
       '#priceblock_listprice',
@@ -187,6 +297,26 @@ export class CheerioHtmlParser implements HtmlParser {
     }
 
     return { price, originalPrice };
+  }
+
+  /**
+   * Reconstructs a price string from visible `.a-price-symbol`, `.a-price-whole`,
+   * and `.a-price-fraction` sub-elements. Used when `.a-offscreen` is empty.
+   */
+  private reconstructPrice($: cheerio.CheerioAPI, containerSelectors: string[]): string {
+    for (const sel of containerSelectors) {
+      const container = $(sel).first();
+      if (container.length === 0) continue;
+
+      const symbol = container.find('.a-price-symbol').first().text().trim();
+      const whole = container.find('.a-price-whole').first().contents().first().text().trim();
+      const fraction = container.find('.a-price-fraction').first().text().trim();
+
+      if (whole) {
+        return fraction ? `${symbol}${whole},${fraction}` : `${symbol}${whole}`;
+      }
+    }
+    return '';
   }
 
   private extractPrime($: cheerio.CheerioAPI): boolean {
@@ -285,7 +415,16 @@ export class CheerioHtmlParser implements HtmlParser {
   }
 
   private extractProductGroup(html: string): string | undefined {
-    return html.match(/"productGroupID"\s*:\s*"([^"]+)"/)?.[1] || undefined;
+    const raw = html.match(/"productGroupID"\s*:\s*"([^"]+)"/)?.[1];
+    if (!raw) return undefined;
+
+    if (PRODUCT_GROUP_LABELS[raw]) return PRODUCT_GROUP_LABELS[raw];
+
+    const stripped = raw.replace(/_display_on_website$/, '');
+    return stripped
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
   }
 
   private parseCouponHref(href: string): CouponInfo | null {

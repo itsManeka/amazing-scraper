@@ -38,6 +38,6 @@ export interface ProductPage {
   publisher?: string;
   /** List of contributors with roles (e.g. ["Author Name (Autor)", "Translator (Tradutor)"]). */
   contributors?: string[];
-  /** Product group identifier (e.g. "book_display_on_website"). */
+  /** Product group label following PA API DisplayValue convention (e.g. "Book", "DVD", "Video Games"). */
   productGroup?: string;
 }
