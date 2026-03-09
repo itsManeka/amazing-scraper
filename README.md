@@ -1,9 +1,11 @@
 # amazing-scraper
 
 [![npm version](https://badge.fury.io/js/amazing-scraper.svg)](https://badge.fury.io/js/amazing-scraper)
-[![Build Status](https://github.com/itsManeka/amazing-scraper/workflows/Build%2C%20Test%20%26%20Publish/badge.svg)](https://github.com/itsManeka/amazing-scraper/actions)
+[![CI](https://github.com/itsManeka/amazing-scraper/workflows/CI/badge.svg)](https://github.com/itsManeka/amazing-scraper/actions)
 [![codecov](https://codecov.io/github/itsManeka/amazing-scraper/graph/badge.svg?token=02QHN94WKP)](https://codecov.io/github/itsManeka/amazing-scraper)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
+[![semantic-release](https://img.shields.io/badge/semantic--release-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
 TypeScript library for scraping Amazon Brasil product data — coupon promotions, product pages, and HQ/Manga pre-sale listings.
 
@@ -263,6 +265,11 @@ npm run test:watch    # watch mode
 - **Login-required coupons** — coupons that require authentication redirect to the sign-in page. The library does not support authenticated sessions and will return `{ found: false }` or fail.
 - **Terms of Service** — high-volume automated access violates Amazon's Terms of Service. Use responsibly.
 - **CAPTCHA** — Amazon may serve CAPTCHA pages (HTTP 200) instead of content. The library detects this and throws `ScraperError('blocked')`, but cannot solve CAPTCHAs.
+
+## Documentation
+
+- [Wiki](https://github.com/itsmaneka/amazing-scraper/wiki) — Architecture, API Reference, Changelog
+- [Contributing](CONTRIBUTING.md) — How to contribute, commit conventions, development setup
 
 ## License
 

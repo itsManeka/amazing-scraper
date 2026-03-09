@@ -1,0 +1,73 @@
+name: Update Wiki
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  update-wiki:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate API documentation
+        run: npm run docs
+
+      - name: Configure git credentials
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Clone wiki repository
+        run: |
+          git clone https://github.com/itsmaneka/amazing-scraper.wiki.git wiki
+
+      - name: Copy wiki content
+        run: |
+          cp docs/wiki/Home.md wiki/Home.md
+          cp docs/wiki/Architecture.md wiki/Architecture.md
+          cp docs/wiki/Contributing.md wiki/Contributing.md
+          cp CHANGELOG.md wiki/Changelog.md
+
+          cp docs/api/API-Reference.md wiki/API-Reference.md
+          if [ -d "docs/api/classes" ]; then
+            cp -r docs/api/classes wiki/
+          fi
+          if [ -d "docs/api/interfaces" ]; then
+            cp -r docs/api/interfaces wiki/
+          fi
+          if [ -d "docs/api/functions" ]; then
+            cp -r docs/api/functions wiki/
+          fi
+          if [ -d "docs/api/type-aliases" ]; then
+            cp -r docs/api/type-aliases wiki/
+          fi
+
+      - name: Commit and push wiki changes
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No wiki changes to commit"
+          else
+            git commit -m "docs: update wiki from release"
+            git push
+          fi
