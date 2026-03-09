@@ -427,6 +427,46 @@ export class CheerioHtmlParser implements HtmlParser {
       .join(' ');
   }
 
+  /**
+   * Extracts ASINs from an Amazon search results page.
+   * Selects elements with `data-component-type="s-search-result"` and reads their `data-asin`.
+   */
+  extractSearchResultAsins(html: string): string[] {
+    const $ = cheerio.load(html);
+    const asins: string[] = [];
+
+    $('[data-component-type="s-search-result"][data-asin]').each((_, el) => {
+      const asin = $(el).attr('data-asin')?.trim();
+      if (asin) {
+        asins.push(asin);
+      }
+    });
+
+    return asins;
+  }
+
+  /**
+   * Checks whether the search results page has a next page link.
+   * Tries multiple selectors to handle layout variations.
+   */
+  hasNextSearchPage(html: string): boolean {
+    const $ = cheerio.load(html);
+
+    if ($('.s-pagination-next:not(.s-pagination-disabled)').length > 0) {
+      return true;
+    }
+
+    if ($('a.s-pagination-next').length > 0) {
+      return true;
+    }
+
+    if ($('li.a-last a').length > 0) {
+      return true;
+    }
+
+    return false;
+  }
+
   private parseCouponHref(href: string): CouponInfo | null {
     try {
       const fullUrl = href.startsWith('http')

@@ -5,9 +5,9 @@
 [![codecov](https://codecov.io/github/itsManeka/amazing-scraper/graph/badge.svg?token=02QHN94WKP)](https://codecov.io/github/itsManeka/amazing-scraper)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-TypeScript library for extracting product listings from Amazon Brasil coupon promotions.
+TypeScript library for scraping Amazon Brasil product data — coupon promotions, product pages, and HQ/Manga pre-sale listings.
 
-Given a product ASIN, it discovers the active coupon, extracts the CSRF token, paginates through all participating products, and returns a structured result.
+Given a product ASIN, it discovers the active coupon, extracts the CSRF token, paginates through all participating products, and returns a structured result. It can also fetch pre-sale ASINs from the Amazon Brasil HQ & Manga category.
 
 ## Installation
 
@@ -37,6 +37,10 @@ if (page.hasCoupon && page.couponInfo) {
 } else {
   console.log(`No coupon found for ASIN ${page.asin}`);
 }
+
+// Or: Fetch pre-sale ASINs from HQ & Manga category
+const preSales = await scraper.fetchPreSales({ limit: 3 });
+console.log(`Found ${preSales.asins.length} pre-sale ASINs`);
 ```
 
 ## API Reference
@@ -100,6 +104,35 @@ Returns `CouponResult`:
   products: Product[];
   metadata?: CouponMetadata;
 }
+```
+
+### `scraper.fetchPreSales(options?)`
+
+Fetches pre-sale ASINs from the Amazon Brasil HQ & Manga search page. Paginates through results and stops based on page limit or a stop-ASIN sentinel.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `limit` | `number` | `5` | Maximum number of search pages to fetch |
+| `stopAtAsin` | `string` | — | Stop before this ASIN (excluded from result). Useful for incremental daily fetches |
+
+Returns `FetchPreSalesResult`:
+
+```typescript
+interface FetchPreSalesResult {
+  asins: string[];
+}
+```
+
+**Incremental usage pattern:**
+
+```typescript
+// First run: fetch everything up to 5 pages
+const first = await scraper.fetchPreSales();
+const lastSeen = first.asins[0]; // save the first ASIN
+
+// Next run: only fetch new ASINs (stop when reaching lastSeen)
+const next = await scraper.fetchPreSales({ stopAtAsin: lastSeen });
+console.log(`${next.asins.length} new pre-sale ASINs found`);
 ```
 
 ### `CouponMetadata`
@@ -174,11 +207,11 @@ const scraper = createScraper({ logger: myLogger });
 ```
 src/
   domain/
-    entities/          Product, CouponInfo, CouponResult, CouponMetadata
+    entities/          Product, CouponInfo, CouponResult, CouponMetadata, FetchPreSalesResult
     errors/            ScraperError
   application/
     ports/             HttpClient, HtmlParser, Logger
-    use-cases/         FetchProduct, ExtractCouponProducts
+    use-cases/         FetchProduct, ExtractCouponProducts, FetchPreSales
   infrastructure/
     http/              AxiosHttpClient (axios + tough-cookie)
     parsers/           CheerioHtmlParser (cheerio)
@@ -194,6 +227,12 @@ The library follows Clean Architecture: the domain has no external dependencies,
 1. **Fetch product page** — GET `/dp/{ASIN}` with browser-like headers
 2. **Extract product data** — parse HTML for title, price, stock, coupon link, etc.
 3. **Return `ProductPage`** — includes `couponInfo` when a coupon is detected
+
+### `fetchPreSales`
+1. **Build search URL** — appends `&page=N` to the HQ & Manga pre-sales base URL
+2. **Extract ASINs** — parses `data-asin` from `s-search-result` elements on each page
+3. **Paginate** — checks for a next-page link and fetches subsequent pages with a random delay
+4. **Stop conditions** (checked in order): page limit reached, empty results page, stop-ASIN sentinel found, no next page link
 
 ### `extractCouponProducts` (Step 2)
 1. **Fetch coupon page** — GET the coupon URL (built from `CouponInfo`), extract anti-CSRF token and coupon metadata (title, description, expiration)

@@ -844,4 +844,121 @@ describe('CheerioHtmlParser', () => {
       expect(result.expiresAt).toBe('12/03/2026');
     });
   });
+
+  describe('extractSearchResultAsins', () => {
+    it('extracts ASINs from search result elements', () => {
+      const html = `
+        <html><body>
+          <div data-component-type="s-search-result" data-asin="B0ASIN001"><span>Product 1</span></div>
+          <div data-component-type="s-search-result" data-asin="B0ASIN002"><span>Product 2</span></div>
+          <div data-component-type="s-search-result" data-asin="B0ASIN003"><span>Product 3</span></div>
+        </body></html>
+      `;
+      const result = parser.extractSearchResultAsins(html);
+      expect(result).toEqual(['B0ASIN001', 'B0ASIN002', 'B0ASIN003']);
+    });
+
+    it('skips elements with empty data-asin', () => {
+      const html = `
+        <html><body>
+          <div data-component-type="s-search-result" data-asin="B0ASIN001"></div>
+          <div data-component-type="s-search-result" data-asin=""></div>
+          <div data-component-type="s-search-result" data-asin="B0ASIN003"></div>
+        </body></html>
+      `;
+      const result = parser.extractSearchResultAsins(html);
+      expect(result).toEqual(['B0ASIN001', 'B0ASIN003']);
+    });
+
+    it('ignores elements without data-component-type="s-search-result"', () => {
+      const html = `
+        <html><body>
+          <div data-component-type="s-search-result" data-asin="B0VALID"></div>
+          <div data-component-type="s-other" data-asin="B0INVALID"></div>
+          <div data-asin="B0NOTYPE"></div>
+        </body></html>
+      `;
+      const result = parser.extractSearchResultAsins(html);
+      expect(result).toEqual(['B0VALID']);
+    });
+
+    it('returns empty array when no search results exist', () => {
+      const html = '<html><body><p>No results</p></body></html>';
+      const result = parser.extractSearchResultAsins(html);
+      expect(result).toEqual([]);
+    });
+
+    it('preserves order of ASINs as they appear in the HTML', () => {
+      const html = `
+        <html><body>
+          <div data-component-type="s-search-result" data-asin="Z_LAST"></div>
+          <div data-component-type="s-search-result" data-asin="A_FIRST"></div>
+          <div data-component-type="s-search-result" data-asin="M_MIDDLE"></div>
+        </body></html>
+      `;
+      const result = parser.extractSearchResultAsins(html);
+      expect(result).toEqual(['Z_LAST', 'A_FIRST', 'M_MIDDLE']);
+    });
+
+    it('trims whitespace from data-asin values', () => {
+      const html = `
+        <html><body>
+          <div data-component-type="s-search-result" data-asin="  B0SPACED  "></div>
+        </body></html>
+      `;
+      const result = parser.extractSearchResultAsins(html);
+      expect(result).toEqual(['B0SPACED']);
+    });
+  });
+
+  describe('hasNextSearchPage', () => {
+    it('returns true when .s-pagination-next link exists', () => {
+      const html = `
+        <html><body>
+          <div class="s-pagination-container">
+            <a class="s-pagination-next" href="/s?page=2">Next</a>
+          </div>
+        </body></html>
+      `;
+      expect(parser.hasNextSearchPage(html)).toBe(true);
+    });
+
+    it('returns false when .s-pagination-next is disabled', () => {
+      const html = `
+        <html><body>
+          <div class="s-pagination-container">
+            <span class="s-pagination-next s-pagination-disabled">Next</span>
+          </div>
+        </body></html>
+      `;
+      expect(parser.hasNextSearchPage(html)).toBe(false);
+    });
+
+    it('returns true when li.a-last contains a link', () => {
+      const html = `
+        <html><body>
+          <ul class="a-pagination">
+            <li class="a-last"><a href="/s?page=3">Next</a></li>
+          </ul>
+        </body></html>
+      `;
+      expect(parser.hasNextSearchPage(html)).toBe(true);
+    });
+
+    it('returns false when li.a-last has no anchor', () => {
+      const html = `
+        <html><body>
+          <ul class="a-pagination">
+            <li class="a-last"><span>Next</span></li>
+          </ul>
+        </body></html>
+      `;
+      expect(parser.hasNextSearchPage(html)).toBe(false);
+    });
+
+    it('returns false when no pagination elements exist', () => {
+      const html = '<html><body><p>Single page results</p></body></html>';
+      expect(parser.hasNextSearchPage(html)).toBe(false);
+    });
+  });
 });

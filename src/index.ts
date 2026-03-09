@@ -1,13 +1,15 @@
-export { Product, CouponInfo, CouponMetadata, CouponResult, ExtractCouponProductsResult, ProductPage } from './domain/entities';
+export { Product, CouponInfo, CouponMetadata, CouponResult, ExtractCouponProductsResult, ProductPage, FetchPreSalesResult } from './domain/entities';
 export { ScraperError, ScraperErrorCode, ScraperErrorOptions } from './domain/errors';
 export { HttpClient, HttpResponse } from './application/ports/HttpClient';
 export { Logger } from './application/ports/Logger';
 export { RetryPolicy, RetryContext, RetryDecision, RetryErrorType } from './application/ports/RetryPolicy';
 export { UserAgentProvider } from './application/ports/UserAgentProvider';
-export type { PaginationLimits } from './application/use-cases/ExtractCouponProducts';
+export type { PaginationLimits, DelayConfig } from './application/use-cases/ExtractCouponProducts';
+export type { FetchPreSalesOptions } from './application/use-cases/FetchPreSales';
 
 import { ExtractCouponProducts, DelayConfig, PaginationLimits } from './application/use-cases/ExtractCouponProducts';
 import { FetchProduct } from './application/use-cases/FetchProduct';
+import { FetchPreSales } from './application/use-cases/FetchPreSales';
 import { HttpClient } from './application/ports/HttpClient';
 import { RetryPolicy } from './application/ports/RetryPolicy';
 import { UserAgentProvider } from './application/ports/UserAgentProvider';
@@ -18,7 +20,8 @@ import { CheerioHtmlParser } from './infrastructure/parsers/CheerioHtmlParser';
 import { ConsoleLogger } from './infrastructure/logger/ConsoleLogger';
 import { Logger } from './application/ports/Logger';
 import { ScraperError } from './domain/errors';
-import { CouponInfo, CouponResult, ProductPage } from './domain/entities';
+import { CouponInfo, CouponResult, FetchPreSalesResult, ProductPage } from './domain/entities';
+import { FetchPreSalesOptions } from './application/use-cases/FetchPreSales';
 
 /**
  * Configuration options for the scraper factory.
@@ -54,6 +57,11 @@ export interface AmazonCouponScraper {
    * Requires `CouponInfo` previously obtained from `fetchProduct`.
    */
   extractCouponProducts(couponInfo: CouponInfo): Promise<CouponResult>;
+  /**
+   * Fetches pre-sale ASINs from the Amazon HQ & Manga search page.
+   * Paginates and stops based on page limit or stop-ASIN sentinel.
+   */
+  fetchPreSales(options?: FetchPreSalesOptions): Promise<FetchPreSalesResult>;
 }
 
 /**
@@ -92,9 +100,14 @@ export function createScraper(options?: ScraperOptions): AmazonCouponScraper {
   const fetchProductUseCase = new FetchProduct(
     httpClient, htmlParser, logger, userAgentProvider, retryPolicy, onBlocked,
   );
+  const fetchPreSalesUseCase = new FetchPreSales(
+    httpClient, htmlParser, logger, userAgentProvider, retryPolicy, onBlocked,
+    options?.delayMs,
+  );
 
   return {
     fetchProduct: (asin: string) => fetchProductUseCase.execute(asin),
     extractCouponProducts: (couponInfo: CouponInfo) => extractCouponUseCase.execute(couponInfo),
+    fetchPreSales: (opts?: FetchPreSalesOptions) => fetchPreSalesUseCase.execute(opts),
   };
 }

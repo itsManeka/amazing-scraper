@@ -45,6 +45,8 @@ function createMocks() {
     extractCsrfToken: jest.fn(),
     extractCouponMetadata: jest.fn(),
     extractProductInfo: jest.fn(),
+    extractSearchResultAsins: jest.fn(),
+    hasNextSearchPage: jest.fn(),
   };
 
   const logger: jest.Mocked<Logger> = {

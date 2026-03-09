@@ -31,4 +31,15 @@ export interface HtmlParser {
    * @param logger - Optional logger for emitting warnings on unrecognized availability text
    */
   extractProductInfo(html: string, asin: string, url: string, logger?: Logger): ProductPage;
+
+  /**
+   * Extracts ASINs from an Amazon search results page.
+   * Returns an ordered array of non-empty ASIN strings.
+   */
+  extractSearchResultAsins(html: string): string[];
+
+  /**
+   * Checks whether the search results page has a next page link.
+   */
+  hasNextSearchPage(html: string): boolean;
 }
