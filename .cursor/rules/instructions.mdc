@@ -44,6 +44,8 @@ tests/
 npm run test                      # Executa todos os testes
 npm run test:coverage             # Gera relatório de cobertura
 npm run test:watch                # Modo watch
+npm run docs                      # Gera documentação TypeDoc em docs/api/
+# npm run release                 — executado apenas pelo CI; NÃO rodar localmente
 ```
 
 ### Regras para Novos Testes
@@ -95,6 +97,36 @@ infrastructure/  → Implementações (adapters): DB, APIs, frameworks
 
 ---
 
+## Conventional Commits
+
+Todas as mensagens de commit devem seguir o padrão [Conventional Commits](https://www.conventionalcommits.org/). A validação é feita automaticamente pelo [commitlint](https://commitlint.js.org/) via hook do [Husky](https://typicode.github.io/husky/).
+
+### Formato
+```
+<type>(<scope>): <description>
+```
+
+### Tipos
+| Tipo | Descrição |
+|------|-----------|
+| `feat` | Nova funcionalidade (gera bump **minor**) |
+| `fix` | Correção de bug (gera bump **patch**) |
+| `docs` | Alterações de documentação |
+| `style` | Formatação, sem mudança de lógica |
+| `refactor` | Refatoração de código |
+| `perf` | Melhoria de performance |
+| `test` | Adição ou atualização de testes |
+| `chore` | Tooling, build, CI |
+| `ci` | Alterações em CI/CD |
+
+### Breaking Changes
+Adicionar `!` após o tipo ou `BREAKING CHANGE:` no footer para gerar bump **major**:
+```bash
+git commit -m "feat!: renomeia extractCouponProducts para extractCoupon"
+```
+
+---
+
 ## Fluxo de Desenvolvimento
 
 ### Adicionando Nova Funcionalidade
@@ -113,6 +145,9 @@ infrastructure/  → Implementações (adapters): DB, APIs, frameworks
    npm run test
    npm run build
    ```
+9. **Commit** usando Conventional Commits (commitlint valida automaticamente via hook)
+10. **Pull Request** — o CI (`ci.yml`) valida lint, testes e build automaticamente
+11. **Merge na main** — o [semantic-release](https://semantic-release.gitbook.io/) determina e publica a versão automaticamente
 
 ### Corrigindo Bug
 1. **Reproduzir:** Criar teste que falha
@@ -125,6 +160,8 @@ infrastructure/  → Implementações (adapters): DB, APIs, frameworks
 
 1. ✅ **Use logger em vez de `console.log`**
 2. ✅ **Nunca commite `.env` com credenciais reais**
+3. ✅ **Use Conventional Commits** em todas as mensagens de commit
+4. ✅ **Não altere manualmente `version`** no `package.json` (gerenciado pelo semantic-release)
 5. ✅ **Use TypeScript strict mode** (configurado em `tsconfig.json`)
 6. ✅ **80%+ cobertura de testes** antes de PR
 7. ✅ **Documentar funções públicas** com JSDoc
@@ -137,7 +174,8 @@ infrastructure/  → Implementações (adapters): DB, APIs, frameworks
 
 ### Documentação
 - [README Principal](../../README.md)
-- [Wiki](../../wiki/Home)
+- [Wiki](https://github.com/itsmaneka/amazing-scraper/wiki)
+- [CONTRIBUTING.md](../../CONTRIBUTING.md)
 
 ### Tecnologias
 - [TypeScript](https://www.typescriptlang.org/)
@@ -145,6 +183,10 @@ infrastructure/  → Implementações (adapters): DB, APIs, frameworks
 ### Ferramentas
 - [Jest](https://jestjs.io/) - Testes
 - [ESLint](https://eslint.org/) - Linting
+- [commitlint](https://commitlint.js.org/) - Validação de mensagens de commit
+- [Husky](https://typicode.github.io/husky/) - Git hooks
+- [semantic-release](https://semantic-release.gitbook.io/) - Versionamento e publicação automática
+- [TypeDoc](https://typedoc.org/) - Documentação da API
 
 ---
 
@@ -153,5 +195,12 @@ infrastructure/  → Implementações (adapters): DB, APIs, frameworks
 ### Fluxo de PR
 1. Fork do repositório
 2. Branch para feature: `git checkout -b feature/nova-funcionalidade`
-3. Commit com mensagem clara: `git commit -m 'Add: nova funcionalidade X'`
+3. Commit com Conventional Commits:
+   ```bash
+   git commit -m "feat: nova funcionalidade X"
+   git commit -m "fix: corrige bug Y"
+   git commit -m "chore: atualiza dependências"
+   git commit -m "docs: atualiza README"
+   ```
 4. Push: `git push origin feature/nova-funcionalidade`
+5. Abrir Pull Request contra `main`
