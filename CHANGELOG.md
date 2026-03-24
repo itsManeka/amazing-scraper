@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.3.0...v1.4.0) (2026-03-24)
+
+
+### Features
+
+* export ScrapedAmazonProduct entity and price/product conversion utilities ([b4828d5](https://github.com/itsmaneka/amazing-scraper/commit/b4828d55bdce3182a39aa69effb2f8ccb38c62c1))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
