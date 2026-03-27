@@ -1,6 +1,6 @@
 # amazing-scraper
 
-Biblioteca npm para scraping da Amazon Brasil. Publicado como `amazing-scraper`.
+Biblioteca npm para scraping da Amazon Brasil. Publicado como `amazing-scraper`. Versão atual: `1.4.0`.
 
 ## API publica
 
@@ -55,6 +55,18 @@ npm run build         # TypeScript compiler
 npm run lint          # ESLint
 npm run docs          # TypeDoc
 ```
+
+## Alinhamento com PA-API (desde 1.4.0)
+
+`fetchProduct` retorna campos compatíveis com o que a PA-API retorna no gibipromo, permitindo uso como fallback transparente:
+
+| Campo | Comportamento |
+|-------|--------------|
+| `contributors` | Apenas nomes — sem role entre parênteses (igual a `c.Name` da PA-API) |
+| `imageUrl` | Normalizada para `._SL500_` via `normalizeAmazonImageUrl` (exportada) |
+| `inStock` | `!!offerId && !isOutOfStock` — mesma lógica da PA-API |
+
+A tag de afiliado **não** é aplicada aqui — responsabilidade do consumidor (`AmazonScraperFallbackClient` no gibipromo).
 
 ## Convencoes
 
