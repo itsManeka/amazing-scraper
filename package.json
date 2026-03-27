@@ -20,6 +20,7 @@
     "clean": "rimraf dist",
     "prebuild": "npm run clean",
     "prepare": "husky",
+    "prepublishOnly": "npm run build",
     "release": "semantic-release",
     "docs": "typedoc",
     "example-coupon": "tsx examples/extract-coupon.ts",
