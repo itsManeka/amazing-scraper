@@ -3,6 +3,32 @@ import { HtmlParser } from '../../application/ports/HtmlParser';
 import { Logger } from '../../application/ports/Logger';
 import { CouponInfo, CouponMetadata, ProductPage } from '../../domain/entities';
 
+/**
+ * Normalises an Amazon product image URL to the `._SL500_` size suffix.
+ *
+ * - URLs that already contain a dimension suffix (`._SX\d+_`, `._SY\d+_`, `._SL\d+_`,
+ *   `._AC_\w+_`) have that suffix replaced by `._SL500_`.
+ * - URLs that end with `V1_.jpg` (no dimension suffix) get `._SL500_` inserted before `.jpg`.
+ * - All other URLs are returned unchanged.
+ */
+export function normalizeAmazonImageUrl(url: string): string {
+  // Replace existing dimension suffix with ._SL500_
+  const withSuffix = url.replace(
+    /\._(?:SX\d+|SY\d+|SL\d+|AC(?:_\w+)?)_\./,
+    '._SL500_.',
+  );
+  if (withSuffix !== url) {
+    return withSuffix;
+  }
+
+  // Insert ._SL500_ before .jpg when the URL ends with V1_.jpg (no suffix present)
+  if (/V1_\.jpg$/i.test(url)) {
+    return url.replace(/\.jpg$/i, '._SL500_.jpg');
+  }
+
+  return url;
+}
+
 /** Maps raw `productGroupID` values to PA API-style `ProductGroup.DisplayValue` labels. */
 const PRODUCT_GROUP_LABELS: Record<string, string> = {
   book_display_on_website: 'Book',
@@ -219,7 +245,8 @@ export class CheerioHtmlParser implements HtmlParser {
     const prime = this.extractPrime($);
     const { rating, reviewCount } = this.extractReviews($);
     const couponInfo = this.extractCouponInfo(html);
-    const { inStock, isPreOrder } = this.extractAvailability($, logger);
+    const offerId = this.extractOfferId($);
+    const { inStock, isPreOrder } = this.extractAvailability($, offerId, logger);
 
     return {
       asin,
@@ -232,7 +259,7 @@ export class CheerioHtmlParser implements HtmlParser {
       hasCoupon: couponInfo !== null,
       couponInfo,
       url,
-      offerId: this.extractOfferId($),
+      offerId,
       inStock,
       imageUrl: this.extractImageUrl($),
       isPreOrder,
@@ -359,16 +386,29 @@ export class CheerioHtmlParser implements HtmlParser {
 
   private extractAvailability(
     $: cheerio.CheerioAPI,
+    offerId: string | undefined,
     logger?: Logger,
   ): { inStock: boolean; isPreOrder: boolean } {
     const text = $('#availability .primary-availability-message').text().trim();
-    const inStock = text.includes('Em estoque');
+
+    const isOutOfStock =
+      text.includes('Não disponível') ||
+      text.includes('Indisponível') ||
+      text.toLowerCase().includes('fora de estoque') ||
+      text.includes('Temporariamente indisponível');
+
+    const inStock = !!offerId && !isOutOfStock;
+
     const isPreOrder =
       $('.a-button-preorder').length > 0 ||
       text.toLowerCase().includes('pré-venda') ||
       text.includes('não foi lançado');
 
-    if (text && !inStock && !isPreOrder) {
+    const isKnownInStockText =
+      text.toLowerCase().includes('em estoque') ||
+      text.toLowerCase().includes('disponível');
+
+    if (text && !isKnownInStockText && !isOutOfStock && !isPreOrder) {
       logger?.warn('Unknown availability text', { text });
     }
 
@@ -376,11 +416,11 @@ export class CheerioHtmlParser implements HtmlParser {
   }
 
   private extractImageUrl($: cheerio.CheerioAPI): string | undefined {
-    return (
+    const raw =
       $('#landingImage').attr('data-old-hires') ||
       $('#landingImage').attr('src') ||
-      undefined
-    );
+      undefined;
+    return raw ? normalizeAmazonImageUrl(raw) : undefined;
   }
 
   private extractFormat($: cheerio.CheerioAPI): string | undefined {
@@ -402,13 +442,7 @@ export class CheerioHtmlParser implements HtmlParser {
       const name = $(el).find('a.a-link-normal').first().text().trim();
       if (!name) return;
 
-      const role = $(el)
-        .find('.contribution .a-color-secondary')
-        .text()
-        .replace(/[(),]/g, '')
-        .trim();
-
-      contributors.push(role ? `${name} (${role})` : name);
+      contributors.push(name);
     });
 
     return contributors;

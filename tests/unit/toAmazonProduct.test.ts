@@ -44,7 +44,7 @@ const BASE_PAGE: ProductPage = {
   isPreOrder: false,
   format: 'Capa dura',
   publisher: 'Editora Exemplo',
-  contributors: ['Autor Exemplo (Autor)'],
+  contributors: ['Autor Exemplo'],
   productGroup: 'Book',
 };
 
@@ -65,7 +65,7 @@ describe('toAmazonProduct', () => {
     expect(product.url).toBe('https://www.amazon.com.br/dp/B0TEST1');
     expect(product.format).toBe('Capa dura');
     expect(product.publisher).toBe('Editora Exemplo');
-    expect(product.contributors).toEqual(['Autor Exemplo (Autor)']);
+    expect(product.contributors).toEqual(['Autor Exemplo']);
     expect(product.productGroup).toBe('Book');
   });
 

@@ -1,4 +1,4 @@
-import { CheerioHtmlParser } from '../../src/infrastructure/parsers/CheerioHtmlParser';
+import { CheerioHtmlParser, normalizeAmazonImageUrl } from '../../src/infrastructure/parsers/CheerioHtmlParser';
 import { Logger } from '../../src/application/ports/Logger';
 
 describe('CheerioHtmlParser', () => {
@@ -446,8 +446,8 @@ describe('CheerioHtmlParser', () => {
     });
 
     describe('availability — inStock / isPreOrder', () => {
-      it('returns inStock: true when availability text is "Em estoque"', () => {
-        const html = buildHtml({ availability: ' Em estoque ' });
+      it('returns inStock: true when offerId is present and availability text is not a negative marker', () => {
+        const html = buildHtml({ availability: ' Em estoque ', merchantId: 'A1ZZFT5FULY4LN' });
         const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
         expect(result.inStock).toBe(true);
         expect(result.isPreOrder).toBe(false);
@@ -501,6 +501,52 @@ describe('CheerioHtmlParser', () => {
         const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
         expect(result.inStock).toBe(false);
         expect(result.isPreOrder).toBe(false);
+      });
+
+      it('returns inStock: false when offerId is absent regardless of availability text', () => {
+        const html = buildHtml({ availability: 'Em estoque' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.inStock).toBe(false);
+      });
+
+      it('returns inStock: false when availability text is "Não disponível" even with offerId', () => {
+        const html = buildHtml({ availability: 'Não disponível', merchantId: 'A1ZZFT5FULY4LN' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.inStock).toBe(false);
+      });
+
+      it('returns inStock: false when availability text is "Indisponível" even with offerId', () => {
+        const html = buildHtml({ availability: 'Indisponível', merchantId: 'A1ZZFT5FULY4LN' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.inStock).toBe(false);
+      });
+
+      it('returns inStock: false when availability text contains "fora de estoque" even with offerId', () => {
+        const html = buildHtml({ availability: 'Produto fora de estoque', merchantId: 'A1ZZFT5FULY4LN' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.inStock).toBe(false);
+      });
+
+      it('returns inStock: false when availability text is "Temporariamente indisponível" even with offerId', () => {
+        const html = buildHtml({ availability: 'Temporariamente indisponível', merchantId: 'A1ZZFT5FULY4LN' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.inStock).toBe(false);
+      });
+
+      it('does not warn on known negative markers', () => {
+        const logger = createLogger();
+        const html = buildHtml({ availability: 'Não disponível', merchantId: 'A1ZZFT5FULY4LN' });
+        parser.extractProductInfo(html, 'B0TEST', 'https://example.com', logger);
+        expect(logger.warn).not.toHaveBeenCalled();
+      });
+
+      it('warns on unknown availability text even when offerId is present', () => {
+        const logger = createLogger();
+        const html = buildHtml({ availability: 'Texto desconhecido', merchantId: 'A1ZZFT5FULY4LN' });
+        parser.extractProductInfo(html, 'B0TEST', 'https://example.com', logger);
+        expect(logger.warn).toHaveBeenCalledWith('Unknown availability text', {
+          text: 'Texto desconhecido',
+        });
       });
     });
 
@@ -587,7 +633,7 @@ describe('CheerioHtmlParser', () => {
     });
 
     describe('contributors', () => {
-      it('extracts contributors with roles', () => {
+      it('extracts contributors with roles (returns only name, role is ignored)', () => {
         const html = buildHtml({
           contributors: [
             { name: 'SenLinYu', role: 'Autor' },
@@ -596,8 +642,8 @@ describe('CheerioHtmlParser', () => {
         });
         const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
         expect(result.contributors).toEqual([
-          'SenLinYu (Autor)',
-          'Helen Pandolfi (Tradutor)',
+          'SenLinYu',
+          'Helen Pandolfi',
         ]);
       });
 
@@ -688,7 +734,7 @@ describe('CheerioHtmlParser', () => {
         offerId: 'A1ZZFT5FULY4LN',
         format: 'Capa Comum',
         publisher: 'PANINI (CT)',
-        contributors: ['Aaron: Jason (Autor)'],
+        contributors: ['Aaron: Jason'],
         productGroup: 'Book',
       });
     });
@@ -960,5 +1006,59 @@ describe('CheerioHtmlParser', () => {
       const html = '<html><body><p>Single page results</p></body></html>';
       expect(parser.hasNextSearchPage(html)).toBe(false);
     });
+  });
+});
+
+// ---------- normalizeAmazonImageUrl ----------
+
+describe('normalizeAmazonImageUrl', () => {
+  it('replaces ._SX<n>_ suffix with ._SL500_', () => {
+    const url = 'https://m.media-amazon.com/images/I/71abc._SX679_.jpg';
+    expect(normalizeAmazonImageUrl(url)).toBe(
+      'https://m.media-amazon.com/images/I/71abc._SL500_.jpg',
+    );
+  });
+
+  it('replaces ._SY<n>_ suffix with ._SL500_', () => {
+    const url = 'https://m.media-amazon.com/images/I/71abc._SY300_.jpg';
+    expect(normalizeAmazonImageUrl(url)).toBe(
+      'https://m.media-amazon.com/images/I/71abc._SL500_.jpg',
+    );
+  });
+
+  it('replaces ._SL<n>_ suffix with ._SL500_ (different size)', () => {
+    const url = 'https://m.media-amazon.com/images/I/71abc._SL1000_.jpg';
+    expect(normalizeAmazonImageUrl(url)).toBe(
+      'https://m.media-amazon.com/images/I/71abc._SL500_.jpg',
+    );
+  });
+
+  it('is idempotent when suffix is already ._SL500_', () => {
+    const url = 'https://m.media-amazon.com/images/I/71abc._SL500_.jpg';
+    expect(normalizeAmazonImageUrl(url)).toBe(url);
+  });
+
+  it('replaces ._AC_<word>_ suffix with ._SL500_', () => {
+    const url = 'https://m.media-amazon.com/images/I/71abc._AC_SX300_SY300_.jpg';
+    expect(normalizeAmazonImageUrl(url)).toBe(
+      'https://m.media-amazon.com/images/I/71abc._SL500_.jpg',
+    );
+  });
+
+  it('inserts ._SL500_ before .jpg when URL ends with V1_.jpg', () => {
+    const url = 'https://m.media-amazon.com/images/I/71abc+V1_.jpg';
+    expect(normalizeAmazonImageUrl(url)).toBe(
+      'https://m.media-amazon.com/images/I/71abc+V1_._SL500_.jpg',
+    );
+  });
+
+  it('returns URL unchanged when it does not match any known pattern', () => {
+    const url = 'https://example.com/image.jpg';
+    expect(normalizeAmazonImageUrl(url)).toBe(url);
+  });
+
+  it('returns URL unchanged when it has no Amazon image suffix', () => {
+    const url = 'https://m.media-amazon.com/images/I/71abc.jpg';
+    expect(normalizeAmazonImageUrl(url)).toBe(url);
   });
 });

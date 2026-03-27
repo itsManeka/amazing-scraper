@@ -1,6 +1,7 @@
 export { Product, CouponInfo, CouponMetadata, CouponResult, ExtractCouponProductsResult, ProductPage, FetchPreSalesResult, ScrapedAmazonProduct } from './domain/entities';
 export { ScraperError, ScraperErrorCode, ScraperErrorOptions } from './domain/errors';
 export { toAmazonProduct, parseAmazonPrice } from './domain/mappers/toAmazonProduct';
+export { normalizeAmazonImageUrl } from './infrastructure/parsers/CheerioHtmlParser';
 export { HttpClient, HttpResponse } from './application/ports/HttpClient';
 export { Logger } from './application/ports/Logger';
 export { RetryPolicy, RetryContext, RetryDecision, RetryErrorType } from './application/ports/RetryPolicy';
