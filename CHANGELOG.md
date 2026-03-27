@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.5.0...v1.5.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* **release:** add build step before semantic-release publish ([675160d](https://github.com/itsmaneka/amazing-scraper/commit/675160df507c80ca0c0fa63b4f1bc747735757fa))
+
 # [1.5.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.4.0...v1.5.0) (2026-03-27)
 
 
