@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.4.0...v1.5.0) (2026-03-27)
+
+
+### Features
+
+* align fetchProduct output with PA-API format (v1.4.0) ([146bd48](https://github.com/itsmaneka/amazing-scraper/commit/146bd484e49f438d62759beac92134e50f7d39c9))
+
 # [1.4.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.3.0...v1.4.0) (2026-03-24)
 
 
