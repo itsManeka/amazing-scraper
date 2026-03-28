@@ -1,5 +1,6 @@
 import { ProductPage } from '../entities/ProductPage';
 import { ScrapedAmazonProduct } from '../entities/ScrapedAmazonProduct';
+import { ScraperError } from '../errors/ScraperError';
 
 /**
  * Converte uma string de preço em Real para número.
@@ -32,6 +33,10 @@ export function parseAmazonPrice(formatted: string): number {
  * // product agora tem currentPrice: number, fullPrice: number, etc.
  */
 export function toAmazonProduct(page: ProductPage): ScrapedAmazonProduct {
+  if (page.price === null) {
+    throw new ScraperError('price_not_found', { asin: page.asin });
+  }
+
   const currentPrice = parseAmazonPrice(page.price);
   const fullPrice = page.originalPrice
     ? parseAmazonPrice(page.originalPrice)

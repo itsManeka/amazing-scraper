@@ -380,10 +380,27 @@ describe('CheerioHtmlParser', () => {
         expect(result.price).toBe('R$59,99');
       });
 
-      it('returns empty string when no price selector matches and no sub-elements exist', () => {
+      it('returns null when no price selector matches and no sub-elements exist', () => {
         const html = buildHtml({});
         const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
-        expect(result.price).toBe('');
+        expect(result.price).toBeNull();
+      });
+
+      it('returns null for price and logs warn when no price selector matches', () => {
+        const logger: Logger = { warn: jest.fn(), info: jest.fn(), error: jest.fn() };
+        const html = buildHtml({});
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com', logger);
+        expect(result.price).toBeNull();
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.stringContaining('Price selector returned no value'),
+          expect.anything(),
+        );
+      });
+
+      it('returns price as string R$ 0,00 when explicitly present (free product)', () => {
+        const html = buildHtml({ price: 'R$ 0,00' });
+        const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
+        expect(result.price).toBe('R$ 0,00');
       });
 
       it('extracts original price from .a-price.a-text-price', () => {
@@ -395,13 +412,13 @@ describe('CheerioHtmlParser', () => {
       it('ignores originalPrice when it equals current price', () => {
         const html = buildHtml({ price: 'R$ 39,90', originalPrice: 'R$ 39,90' });
         const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
-        expect(result.originalPrice).toBe('');
+        expect(result.originalPrice).toBeNull();
       });
 
-      it('returns empty originalPrice when section is absent', () => {
+      it('returns null originalPrice when section is absent', () => {
         const html = buildHtml({ price: 'R$ 39,90' });
         const result = parser.extractProductInfo(html, 'B0TEST', 'https://example.com');
-        expect(result.originalPrice).toBe('');
+        expect(result.originalPrice).toBeNull();
       });
     });
 
@@ -537,7 +554,7 @@ describe('CheerioHtmlParser', () => {
         const logger = createLogger();
         const html = buildHtml({ availability: 'Não disponível', merchantId: 'A1ZZFT5FULY4LN' });
         parser.extractProductInfo(html, 'B0TEST', 'https://example.com', logger);
-        expect(logger.warn).not.toHaveBeenCalled();
+        expect(logger.warn).not.toHaveBeenCalledWith('Unknown availability text', expect.anything());
       });
 
       it('warns on unknown availability text even when offerId is present', () => {

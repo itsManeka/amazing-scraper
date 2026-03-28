@@ -241,7 +241,7 @@ export class CheerioHtmlParser implements HtmlParser {
     const $ = cheerio.load(html);
 
     const title = this.extractTitle($);
-    const { price, originalPrice } = this.extractPrices($);
+    const { price, originalPrice } = this.extractPrices($, logger);
     const prime = this.extractPrime($);
     const { rating, reviewCount } = this.extractReviews($);
     const couponInfo = this.extractCouponInfo(html);
@@ -279,7 +279,7 @@ export class CheerioHtmlParser implements HtmlParser {
     );
   }
 
-  private extractPrices($: cheerio.CheerioAPI): { price: string; originalPrice: string } {
+  private extractPrices($: cheerio.CheerioAPI, logger?: Logger): { price: string | null; originalPrice: string | null } {
     const priceSelectors = [
       '#priceblock_ourprice',
       '#priceblock_dealprice',
@@ -290,7 +290,7 @@ export class CheerioHtmlParser implements HtmlParser {
       '#corePriceDisplay_desktop_feature_div .a-price:not(.a-text-price) .a-offscreen',
     ];
 
-    let price = '';
+    let price: string | null = null;
     for (const sel of priceSelectors) {
       const val = $(sel).first().text().trim();
       if (val) {
@@ -300,11 +300,16 @@ export class CheerioHtmlParser implements HtmlParser {
     }
 
     // Fallback: reconstruct from visible sub-elements when .a-offscreen is empty
-    if (!price) {
-      price = this.reconstructPrice($, [
+    if (price === null) {
+      const reconstructed = this.reconstructPrice($, [
         '.priceToPay',
         '#corePriceDisplay_desktop_feature_div .a-price:not(.a-text-price)',
       ]);
+      price = reconstructed || null;
+    }
+
+    if (price === null) {
+      logger?.warn('Price selector returned no value — product page may be missing price', {});
     }
 
     const originalPriceSelectors = [
@@ -314,7 +319,7 @@ export class CheerioHtmlParser implements HtmlParser {
       '.basisPrice .a-offscreen',
     ];
 
-    let originalPrice = '';
+    let originalPrice: string | null = null;
     for (const sel of originalPriceSelectors) {
       const val = $(sel).first().text().trim();
       if (val && val !== price) {

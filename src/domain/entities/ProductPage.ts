@@ -8,10 +8,18 @@ export interface ProductPage {
   asin: string;
   /** Product title extracted from the page. */
   title: string;
-  /** Current selling price as a formatted string (e.g. "R$ 99,90"). */
-  price: string;
-  /** Original/list price before discounts (empty string if not available). */
-  originalPrice: string;
+  /**
+   * Current selling price as a formatted string (e.g. "R$ 99,90"), or `null` when the
+   * price selector did not find any value on the page.
+   * `null` means the scraper could not determine a price — it does NOT mean the product is
+   * free. A string value of `'R$ 0,00'` represents a legitimately free product (e.g. ebooks).
+   */
+  price: string | null;
+  /**
+   * Original/list price before discounts (e.g. "R$ 149,90"), or `null` when the selector
+   * did not find a value on the page.
+   */
+  originalPrice: string | null;
   /** Whether the product is eligible for Amazon Prime shipping. */
   prime: boolean;
   /** Average customer rating (0–5). */

@@ -1,5 +1,6 @@
 import { parseAmazonPrice, toAmazonProduct } from '../../src/domain/mappers/toAmazonProduct';
 import { ProductPage } from '../../src/domain/entities';
+import { ScraperError } from '../../src/domain/errors';
 
 // ---------- parseAmazonPrice ----------
 
@@ -69,8 +70,8 @@ describe('toAmazonProduct', () => {
     expect(product.productGroup).toBe('Book');
   });
 
-  it('usa currentPrice como fullPrice quando originalPrice está vazio', () => {
-    const page = { ...BASE_PAGE, originalPrice: '' };
+  it('usa currentPrice como fullPrice quando originalPrice é null', () => {
+    const page = { ...BASE_PAGE, originalPrice: null };
     const product = toAmazonProduct(page);
     expect(product.fullPrice).toBe(product.currentPrice);
     expect(product.fullPrice).toBe(99.9);
@@ -112,5 +113,29 @@ describe('toAmazonProduct', () => {
     expect('hasCoupon' in product).toBe(false);
     expect('couponInfo' in product).toBe(false);
     expect('asin' in product).toBe(false);
+  });
+
+  it('lança ScraperError com code price_not_found quando price é null', () => {
+    const page: ProductPage = { ...BASE_PAGE, price: null };
+    expect(() => toAmazonProduct(page)).toThrow(ScraperError);
+    try {
+      toAmazonProduct(page);
+    } catch (err) {
+      expect(err).toBeInstanceOf(ScraperError);
+      expect((err as ScraperError).code).toBe('price_not_found');
+      expect((err as ScraperError).context).toEqual({ asin: BASE_PAGE.asin });
+    }
+  });
+
+  it('retorna currentPrice: 0 para produto gratuito com price R$ 0,00', () => {
+    const page: ProductPage = { ...BASE_PAGE, price: 'R$ 0,00', originalPrice: null };
+    const product = toAmazonProduct(page);
+    expect(product.currentPrice).toBe(0);
+  });
+
+  it('retorna currentPrice: 49.9 para price R$ 49,90', () => {
+    const page: ProductPage = { ...BASE_PAGE, price: 'R$ 49,90', originalPrice: null };
+    const product = toAmazonProduct(page);
+    expect(product.currentPrice).toBe(49.9);
   });
 });

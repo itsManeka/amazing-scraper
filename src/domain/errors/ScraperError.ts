@@ -2,7 +2,9 @@ export type ScraperErrorCode =
   | 'csrf_not_found'
   | 'blocked'
   | 'session_expired'
-  | 'no_coupon';
+  | 'no_coupon'
+  | 'price_not_found'
+  | 'incomplete_data';
 
 export interface ScraperErrorOptions {
   retryable?: boolean;
