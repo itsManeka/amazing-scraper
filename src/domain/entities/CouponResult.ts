@@ -6,7 +6,6 @@ import { Product } from './Product';
  */
 export interface CouponResult {
   promotionId: string;
-  sourceAsin: string;
   totalProducts: number;
   products: Product[];
   /** Coupon promotion metadata (title, description, expiration). */
@@ -15,9 +14,9 @@ export interface CouponResult {
 
 /**
  * Discriminated union returned by the use case.
- * - `found: false` — the source ASIN has no active coupon.
+ * - `found: false` — the promotion has no active coupon.
  * - `found: true`  — coupon found; `result` contains all products.
  */
 export type ExtractCouponProductsResult =
-  | { found: false; sourceAsin: string }
+  | { found: false }
   | { found: true; result: CouponResult };

@@ -90,7 +90,6 @@ export class ExtractCouponProducts {
 
     return {
       promotionId: couponInfo.promotionId,
-      sourceAsin: couponInfo.redirectAsin,
       totalProducts: products.length,
       products,
       metadata,

@@ -101,7 +101,6 @@ Returns `CouponResult`:
 ```typescript
 {
   promotionId: string;
-  sourceAsin: string;
   totalProducts: number;
   products: Product[];
   metadata?: CouponMetadata;

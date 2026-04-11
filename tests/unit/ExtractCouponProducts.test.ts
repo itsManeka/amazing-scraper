@@ -142,7 +142,7 @@ describe('ExtractCouponProducts', () => {
       expect(result.totalProducts).toBe(3);
       expect(result.products.map(p => p.asin)).toEqual(['B001', 'B002', 'B003']);
       expect(result.promotionId).toBe('PROMO123');
-      expect(result.sourceAsin).toBe('B0TEST');
+      expect(result).not.toHaveProperty('sourceAsin');
     });
   });
 
