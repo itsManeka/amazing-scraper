@@ -74,3 +74,8 @@ A tag de afiliado **não** é aplicada aqui — responsabilidade do consumidor (
 - Testes com nock (mock HTTP)
 - Conventional commits + semantic-release
 - 95%+ cobertura de testes
+
+## Indice
+
+- [Agentes](agents/INDEX.md) — scraper-developer
+- [Skills](skills/INDEX.md) — add-scraper, run-tests

@@ -1,25 +1,32 @@
 ---
 name: scraper-developer
 description: Desenvolve scrapers e parsers para o amazing-scraper. Novos use cases, entidades, parsers HTML. Use para adicionar ou modificar funcionalidades de scraping.
+template: .claude/templates/agents/scraper-developer.md
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: inherit
 ---
 
+> Ao iniciar, leia o template base em `.claude/templates/agents/scraper-developer.md` (raiz do workspace) para contexto generico de desenvolvimento de scrapers.
+
 Voce desenvolve scrapers para o amazing-scraper (Amazon Brasil).
 
-## Ao adicionar novo scraper/parser
+## Estrutura do Projeto
 
-1. **Entidade** em `src/domain/entities/` se necessario
-2. **Use case** em `src/application/use-cases/`
-3. **Port** (interface) em `src/application/ports/` se necessario
-4. **Parser** em `src/infrastructure/parsers/` (Cheerio)
-5. **Testes** com nock para mock HTTP
-6. **Export** em `src/index.ts`
+```
+src/
+  domain/entities/       Product, ProductPage, CouponInfo, CouponResult
+  domain/errors/         ScraperError
+  application/ports/     HttpClient, HtmlParser, Logger, RetryPolicy
+  application/use-cases/ FetchProduct, ExtractCouponProducts, FetchPreSales
+  infrastructure/
+    http/                AxiosHttpClient, RotatingUserAgentProvider
+    parsers/             CheerioHtmlParser
+    retry/               ExponentialBackoffRetry
+```
 
-## Boas praticas de scraping
+## Especificidades
 
-- Rotacao de User-Agent (`RotatingUserAgentProvider`)
-- Retry com backoff exponencial (`ExponentialBackoffRetry`)
-- Cookies com `tough-cookie` para sessoes
-- Tratar CAPTCHAs gracefully (retornar erro, nao travar)
-- Parsear HTML com Cheerio (nunca regex)
+- Rotacao de User-Agent via `RotatingUserAgentProvider`
+- Retry com `ExponentialBackoffRetry`
+- Cookies com `tough-cookie` para sessoes Amazon
+- Testes com nock para mock HTTP
