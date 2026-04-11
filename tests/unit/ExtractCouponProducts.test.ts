@@ -14,6 +14,7 @@ const COUPON_INFO: CouponInfo = {
   redirectAsin: 'B0TEST',
   redirectMerchantId: 'MERCH1',
   promotionMerchantId: 'MERCH1',
+  couponCode: null,
 };
 
 function makeProductItem(asin: string, sortIdValue: number) {

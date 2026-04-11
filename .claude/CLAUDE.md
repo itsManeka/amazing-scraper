@@ -24,13 +24,13 @@ Clean Architecture (domain -> application -> infrastructure).
 
 ```
 src/
-  domain/entities/       Product, ProductPage, CouponInfo, CouponResult
+  domain/entities/       Product, ProductPage, CouponInfo (couponCode: string | null), CouponResult
   domain/errors/         ScraperError
   application/ports/     HttpClient, HtmlParser, Logger, RetryPolicy
   application/use-cases/ FetchProduct, ExtractCouponProducts, FetchPreSales
   infrastructure/
     http/                AxiosHttpClient, RotatingUserAgentProvider
-    parsers/             CheerioHtmlParser
+    parsers/             CheerioHtmlParser (extractCouponCode via regex /com o cupom\s+([A-Z0-9]{6,})/i)
     logger/              ConsoleLogger
     retry/               ExponentialBackoffRetry
 ```
@@ -45,7 +45,8 @@ src/
 | `inStock` | `in_stock` |
 | `isPreOrder` | `preorder` |
 | `imageUrl` | `image` |
-| `hasCoupon`, `couponInfo` | (campo a ser adicionado) |
+| `hasCoupon`, `couponInfo` | `coupon` (via CouponScrapingService) |
+| `couponInfo.couponCode` | `coupon.coupon_code` (codigo alfanumerico, ex: "FJOVKLWWIZXM") |
 
 ## Comandos
 

@@ -8,4 +8,10 @@ export interface CouponInfo {
   redirectAsin: string;
   redirectMerchantId: string;
   promotionMerchantId: string;
+  /**
+   * Alphanumeric coupon code extracted from the product page text
+   * (e.g. "FJOVKLWWIZXM" from "com o cupom FJOVKLWWIZXM").
+   * `null` when no code is found in the surrounding text.
+   */
+  couponCode: string | null;
 }

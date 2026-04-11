@@ -113,7 +113,12 @@ export class CheerioHtmlParser implements HtmlParser {
       return null;
     }
 
-    return this.parseCouponHref(couponHref);
+    const couponCode = this.extractCouponCode($);
+    const info = this.parseCouponHref(couponHref);
+    if (info) {
+      info.couponCode = couponCode;
+    }
+    return info;
   }
 
   /**
@@ -506,6 +511,65 @@ export class CheerioHtmlParser implements HtmlParser {
     return false;
   }
 
+  /**
+   * Extracts a coupon code from the product page text.
+   * Looks for patterns like "com o cupom FJOVKLWWIZXM" or "cupom FJOVKLWWIZXM"
+   * in coupon-related elements and their surrounding context.
+   */
+  private extractCouponCode($: cheerio.CheerioAPI): string | null {
+    // Selectors likely to contain coupon text on Amazon product pages
+    const selectors = [
+      '[id*="coupon"]',
+      '[id*="Coupon"]',
+      'a[href*="/promotion/psp/"]',
+      '#promoPriceBlockMessage_feature_div',
+      '#vpcButton',
+    ];
+
+    // Search in element text and parent containers
+    for (const sel of selectors) {
+      const elements = $(sel);
+      for (let i = 0; i < elements.length; i++) {
+        const el = elements.eq(i);
+        // Check the element and its parent for coupon code text
+        const textsToCheck = [
+          el.text(),
+          el.parent().text(),
+          el.closest('div').text(),
+        ];
+
+        for (const text of textsToCheck) {
+          const code = this.matchCouponCode(text);
+          if (code) return code;
+        }
+      }
+    }
+
+    // Fallback: scan full page text (title area, promo blocks)
+    const bodyText = $('body').text();
+    return this.matchCouponCode(bodyText);
+  }
+
+  /**
+   * Matches a coupon code from text using known Brazilian Amazon patterns.
+   * Returns the code in uppercase, or null if no match.
+   */
+  private matchCouponCode(text: string): string | null {
+    // Pattern: "com o cupom XXXX" (most common)
+    const withCupom = text.match(/com o cupom\s+([A-Z0-9]{6,20})/i);
+    if (withCupom?.[1]) return withCupom[1].toUpperCase();
+
+    // Pattern: "cupom XXXX" (shorter variant)
+    const shortCupom = text.match(/cupom\s+([A-Z0-9]{6,20})/i);
+    if (shortCupom?.[1]) return shortCupom[1].toUpperCase();
+
+    // Pattern: "coupon XXXX" (English variant)
+    const coupon = text.match(/coupon\s+([A-Z0-9]{6,20})/i);
+    if (coupon?.[1]) return coupon[1].toUpperCase();
+
+    return null;
+  }
+
   private parseCouponHref(href: string): CouponInfo | null {
     try {
       const fullUrl = href.startsWith('http')
@@ -531,6 +595,7 @@ export class CheerioHtmlParser implements HtmlParser {
         redirectAsin,
         redirectMerchantId,
         promotionMerchantId: redirectMerchantId,
+        couponCode: null,
       };
     } catch {
       return null;

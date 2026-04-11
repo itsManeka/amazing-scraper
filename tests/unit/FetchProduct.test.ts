@@ -150,6 +150,7 @@ describe('FetchProduct', () => {
           redirectAsin: 'B0TEST',
           redirectMerchantId: 'MERCH1',
           promotionMerchantId: 'MERCH1',
+          couponCode: null,
         },
       };
 

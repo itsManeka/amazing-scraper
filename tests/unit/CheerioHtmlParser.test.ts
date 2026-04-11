@@ -23,6 +23,7 @@ describe('CheerioHtmlParser', () => {
         redirectAsin: 'B0TEST123',
         redirectMerchantId: 'M123',
         promotionMerchantId: 'M123',
+        couponCode: null,
       });
     });
 
@@ -42,6 +43,7 @@ describe('CheerioHtmlParser', () => {
         redirectAsin: 'B0ASIN456',
         redirectMerchantId: 'MERCH456',
         promotionMerchantId: 'MERCH456',
+        couponCode: null,
       });
     });
 
@@ -59,6 +61,7 @@ describe('CheerioHtmlParser', () => {
         redirectAsin: 'B0KEY789',
         redirectMerchantId: 'MK789',
         promotionMerchantId: 'MK789',
+        couponCode: null,
       });
     });
 
@@ -92,6 +95,7 @@ describe('CheerioHtmlParser', () => {
         redirectAsin: 'B0FULL',
         redirectMerchantId: 'MFULL',
         promotionMerchantId: 'MFULL',
+        couponCode: null,
       });
     });
 
@@ -138,6 +142,7 @@ describe('CheerioHtmlParser', () => {
         redirectAsin: 'B0C',
         redirectMerchantId: 'MC',
         promotionMerchantId: 'MC',
+        couponCode: null,
       });
     });
 
@@ -148,6 +153,105 @@ describe('CheerioHtmlParser', () => {
         </body></html>
       `;
       expect(parser.extractCouponInfo(html)).toBeNull();
+    });
+
+    describe('couponCode extraction', () => {
+      it('extracts coupon code from "com o cupom XXXX" pattern in coupon element text', () => {
+        const html = `
+          <html><body>
+            <div id="couponBadgeRegularVpc">
+              <span>Exclusivo Prime: Economize 15% com o cupom FJOVKLWWIZXM</span>
+              <a href="/promotion/psp/PROMO1?redirectAsin=B0A&redirectMerchantId=M1">Aplicar</a>
+            </div>
+          </body></html>
+        `;
+        const result = parser.extractCouponInfo(html);
+        expect(result).not.toBeNull();
+        expect(result!.couponCode).toBe('FJOVKLWWIZXM');
+      });
+
+      it('extracts coupon code from "cupom XXXX" short pattern', () => {
+        const html = `
+          <html><body>
+            <div id="couponWidget">
+              <span>Aplique o cupom ABC123DEF e economize</span>
+              <a href="/promotion/psp/PROMO2?redirectAsin=B0B&redirectMerchantId=M2">Aplicar</a>
+            </div>
+          </body></html>
+        `;
+        const result = parser.extractCouponInfo(html);
+        expect(result).not.toBeNull();
+        expect(result!.couponCode).toBe('ABC123DEF');
+      });
+
+      it('extracts coupon code case-insensitively and returns uppercase', () => {
+        const html = `
+          <html><body>
+            <div>
+              <span>Economize com o Cupom abcdef123</span>
+              <a href="/promotion/psp/PROMO3?redirectAsin=B0C&redirectMerchantId=M3">Aplicar</a>
+            </div>
+          </body></html>
+        `;
+        const result = parser.extractCouponInfo(html);
+        expect(result).not.toBeNull();
+        expect(result!.couponCode).toBe('ABCDEF123');
+      });
+
+      it('returns couponCode: null when no code pattern in text', () => {
+        const html = `
+          <html><body>
+            <div id="couponBadgeRegularVpc">
+              <span>Economize 10% neste produto</span>
+              <a href="/promotion/psp/PROMO4?redirectAsin=B0D&redirectMerchantId=M4">Aplicar cupom</a>
+            </div>
+          </body></html>
+        `;
+        const result = parser.extractCouponInfo(html);
+        expect(result).not.toBeNull();
+        expect(result!.couponCode).toBeNull();
+      });
+
+      it('returns couponCode: null when text has "cupom" but no alphanumeric code following', () => {
+        const html = `
+          <html><body>
+            <a href="/promotion/psp/PROMO5?redirectAsin=B0E&redirectMerchantId=M5">
+              Clique para aplicar o cupom
+            </a>
+          </body></html>
+        `;
+        const result = parser.extractCouponInfo(html);
+        expect(result).not.toBeNull();
+        expect(result!.couponCode).toBeNull();
+      });
+
+      it('extracts coupon code from English "coupon XXXX" pattern', () => {
+        const html = `
+          <html><body>
+            <div id="vpcButton">
+              <span>Save 15% with coupon SAVE15CODE</span>
+              <a href="/promotion/psp/PROMO6?redirectAsin=B0F&redirectMerchantId=M6">Apply</a>
+            </div>
+          </body></html>
+        `;
+        const result = parser.extractCouponInfo(html);
+        expect(result).not.toBeNull();
+        expect(result!.couponCode).toBe('SAVE15CODE');
+      });
+
+      it('ignores short codes with fewer than 6 characters', () => {
+        const html = `
+          <html><body>
+            <div id="couponWidget">
+              <span>Use cupom ABC12</span>
+              <a href="/promotion/psp/PROMO7?redirectAsin=B0G&redirectMerchantId=M7">Aplicar</a>
+            </div>
+          </body></html>
+        `;
+        const result = parser.extractCouponInfo(html);
+        expect(result).not.toBeNull();
+        expect(result!.couponCode).toBeNull();
+      });
     });
   });
 
