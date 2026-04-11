@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.7.0...v1.8.0) (2026-04-11)
+
+
+### Features
+
+* **f12:** implement coupon code extraction in amazing-scraper (T2, T7) ([0616c25](https://github.com/itsmaneka/amazing-scraper/commit/0616c25ab75d4534830f21faac2610bf605c8242))
+
 # [1.7.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.6.0...v1.7.0) (2026-04-11)
 
 
