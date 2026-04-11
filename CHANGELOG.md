@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.8.0...v1.8.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* **security:** update axios to 1.15.0 to resolve critical SSRF vulnerabilities ([a9fee1d](https://github.com/itsmaneka/amazing-scraper/commit/a9fee1dbc6d8ba67580f5a498b49ab9279108a3f))
+
 # [1.8.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.7.0...v1.8.0) (2026-04-11)
 
 
