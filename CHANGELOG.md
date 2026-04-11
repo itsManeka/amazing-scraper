@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.6.0...v1.7.0) (2026-04-11)
+
+
+### Features
+
+* **T1:** remove sourceAsin from CouponResult and ExtractCouponProducts ([285248c](https://github.com/itsmaneka/amazing-scraper/commit/285248c802b9861efd6f6539dbba61288e29e940))
+
 # [1.6.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.5.1...v1.6.0) (2026-03-28)
 
 
