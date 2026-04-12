@@ -175,6 +175,16 @@ export class CheerioHtmlParser implements HtmlParser {
     return { title, description, expiresAt };
   }
 
+  /**
+   * Normalises text extracted from Amazon HTML: replaces non-breaking spaces
+   * (`\u00a0` / `&nbsp;`) with regular spaces and trims. This is required
+   * because JS `\s` does not match `\u00a0`, so regexes like `até\s+` would
+   * fail silently when Amazon inserts non-breaking spaces.
+   */
+  private normalizeText(text: string): string {
+    return text.replace(/\u00a0/g, ' ').trim();
+  }
+
   private extractCouponTitle($: cheerio.CheerioAPI): string | null {
     const selectors = [
       '#promotionTitle h1',
@@ -182,7 +192,7 @@ export class CheerioHtmlParser implements HtmlParser {
     ];
 
     for (const sel of selectors) {
-      const text = $(sel).text().trim();
+      const text = this.normalizeText($(sel).text());
       if (text) return text;
     }
 
@@ -190,12 +200,12 @@ export class CheerioHtmlParser implements HtmlParser {
   }
 
   private extractCouponDescription($: cheerio.CheerioAPI): string | null {
-    const text = $('#promotionSchedule').text().trim();
+    const text = this.normalizeText($('#promotionSchedule').text());
     return text || null;
   }
 
   private extractCouponExpiration($: cheerio.CheerioAPI): string | null {
-    const rawText = $('#promotionSchedule').text().trim();
+    const rawText = this.normalizeText($('#promotionSchedule').text());
     if (!rawText) return null;
     return this.parseExpirationText(rawText);
   }

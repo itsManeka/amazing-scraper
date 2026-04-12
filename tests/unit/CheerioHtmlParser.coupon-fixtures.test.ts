@@ -6,6 +6,7 @@ describe('CheerioHtmlParser — coupon fixtures', () => {
   let parser: CheerioHtmlParser;
   let couponPageHtml: string;
   let productPageWithCouponHtml: string;
+  let couponPageFixedOffHtml: string;
 
   beforeAll(() => {
     const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -15,6 +16,10 @@ describe('CheerioHtmlParser — coupon fixtures', () => {
     );
     productPageWithCouponHtml = fs.readFileSync(
       path.join(fixturesDir, 'product-page-with-coupon.html'),
+      'utf-8',
+    );
+    couponPageFixedOffHtml = fs.readFileSync(
+      path.join(fixturesDir, 'coupon-page-fixed-off.html'),
       'utf-8',
     );
   });
@@ -79,6 +84,18 @@ describe('CheerioHtmlParser — coupon fixtures', () => {
     it('returns null when html has no coupon link', () => {
       const htmlNoCoupon = '<html><body><p>No promotion links here</p></body></html>';
       expect(parser.extractCouponInfo(htmlNoCoupon)).toBeNull();
+    });
+  });
+
+  describe('coupon-page-fixed-off', () => {
+    it('extracts title from #promotionTitle h1 with nbsp normalised to regular space', () => {
+      const metadata = parser.extractCouponMetadata(couponPageFixedOffHtml);
+      expect(metadata.title).toBe('Só no app - R$ 50 off em Jogos Galapagos');
+    });
+
+    it('extracts expiresAt as dd/MM/yyyy from #promotionSchedule end date', () => {
+      const metadata = parser.extractCouponMetadata(couponPageFixedOffHtml);
+      expect(metadata.expiresAt).toBe('12/04/2026');
     });
   });
 

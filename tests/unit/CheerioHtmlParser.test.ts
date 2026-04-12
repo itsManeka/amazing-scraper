@@ -1010,6 +1010,21 @@ describe('CheerioHtmlParser', () => {
       expect(result.description).toBe('De quinta-feira 5 de março de 2026 às 14:30 BRT até quinta-feira 12 de março de 2026');
       expect(result.expiresAt).toBe('12/03/2026');
     });
+
+    it('normalizes non-breaking spaces in description and expiresAt', () => {
+      // Amazon occasionally emits &nbsp; (\u00a0) inside the promotionSchedule block.
+      // JS \s does not match \u00a0, so the até\s+ regex would fail silently without
+      // normalization. This test guards against that regression.
+      const html =
+        '<html><body>' +
+        '<div id="promotionSchedule">' +
+        '<span>De\u00a0quinta-feira\u00a05 de março de 2026 até\u00a0domingo\u00a015 de março de 2026</span>' +
+        '</div>' +
+        '</body></html>';
+      const result = parser.extractCouponMetadata(html);
+      expect(result.description).toBe('De quinta-feira 5 de março de 2026 até domingo 15 de março de 2026');
+      expect(result.expiresAt).toBe('15/03/2026');
+    });
   });
 
   describe('extractSearchResultAsins', () => {
