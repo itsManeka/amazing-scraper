@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.8.1...v1.9.0) (2026-04-13)
+
+
+### Features
+
+* **parser:** normalizar \u00a0 em coupon metadata + fixture "R$ X off" ([430f576](https://github.com/itsmaneka/amazing-scraper/commit/430f57626a1089db5cf1a6e1247e60b536eba249))
+
 ## [1.8.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.8.0...v1.8.1) (2026-04-11)
 
 
