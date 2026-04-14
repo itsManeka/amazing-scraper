@@ -1,8 +1,8 @@
-export { Product, CouponInfo, CouponMetadata, CouponResult, ExtractCouponProductsResult, ProductPage, FetchPreSalesResult, ScrapedAmazonProduct } from './domain/entities';
+export { Product, CouponInfo, CouponMetadata, CouponResult, ExtractCouponProductsResult, IndividualCouponInfo, ProductPage, FetchPreSalesResult, ScrapedAmazonProduct } from './domain/entities';
 export { ScraperError, ScraperErrorCode, ScraperErrorOptions } from './domain/errors';
 export { toAmazonProduct, parseAmazonPrice } from './domain/mappers/toAmazonProduct';
 export { normalizeAmazonImageUrl } from './infrastructure/parsers/CheerioHtmlParser';
-export { HttpClient, HttpResponse } from './application/ports/HttpClient';
+export { HttpClient, HttpGetOptions, HttpResponse } from './application/ports/HttpClient';
 export { Logger } from './application/ports/Logger';
 export { RetryPolicy, RetryContext, RetryDecision, RetryErrorType } from './application/ports/RetryPolicy';
 export { UserAgentProvider } from './application/ports/UserAgentProvider';
@@ -12,6 +12,7 @@ export type { FetchPreSalesOptions } from './application/use-cases/FetchPreSales
 import { ExtractCouponProducts, DelayConfig, PaginationLimits } from './application/use-cases/ExtractCouponProducts';
 import { FetchProduct } from './application/use-cases/FetchProduct';
 import { FetchPreSales } from './application/use-cases/FetchPreSales';
+import { FetchIndividualCouponTerms } from './application/use-cases/FetchIndividualCouponTerms';
 import { HttpClient } from './application/ports/HttpClient';
 import { RetryPolicy } from './application/ports/RetryPolicy';
 import { UserAgentProvider } from './application/ports/UserAgentProvider';
@@ -64,6 +65,17 @@ export interface AmazonCouponScraper {
    * Paginates and stops based on page limit or stop-ASIN sentinel.
    */
   fetchPreSales(options?: FetchPreSalesOptions): Promise<FetchPreSalesResult>;
+  /**
+   * Fetches the terms text of an "individual" coupon from the Amazon
+   * popover endpoint (`/promotion/details/popup/{PROMOTION_ID}`).
+   *
+   * Accepts the relative or absolute URL exposed by
+   * `IndividualCouponInfo.termsUrl`. The resolved hostname is pinned to
+   * `www.amazon.com.br` to mitigate SSRF. Returns `null` on network
+   * failure, non-200 response, foreign-host URL, or when the terms
+   * selector is absent.
+   */
+  fetchIndividualCouponTerms(termsUrl: string): Promise<string | null>;
 }
 
 /**
@@ -106,10 +118,15 @@ export function createScraper(options?: ScraperOptions): AmazonCouponScraper {
     httpClient, htmlParser, logger, userAgentProvider, retryPolicy, onBlocked,
     options?.delayMs,
   );
+  const fetchIndividualCouponTermsUseCase = new FetchIndividualCouponTerms(
+    httpClient, htmlParser, logger, userAgentProvider,
+  );
 
   return {
     fetchProduct: (asin: string) => fetchProductUseCase.execute(asin),
     extractCouponProducts: (couponInfo: CouponInfo) => extractCouponUseCase.execute(couponInfo),
     fetchPreSales: (opts?: FetchPreSalesOptions) => fetchPreSalesUseCase.execute(opts),
+    fetchIndividualCouponTerms: (termsUrl: string) =>
+      fetchIndividualCouponTermsUseCase.execute(termsUrl),
   };
 }

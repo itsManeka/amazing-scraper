@@ -1,7 +1,12 @@
 import * as cheerio from 'cheerio';
 import { HtmlParser } from '../../application/ports/HtmlParser';
 import { Logger } from '../../application/ports/Logger';
-import { CouponInfo, CouponMetadata, ProductPage } from '../../domain/entities';
+import {
+  CouponInfo,
+  CouponMetadata,
+  IndividualCouponInfo,
+  ProductPage,
+} from '../../domain/entities';
 
 /**
  * Normalises an Amazon product image URL to the `._SL500_` size suffix.
@@ -119,6 +124,94 @@ export class CheerioHtmlParser implements HtmlParser {
       info.couponCode = couponCode;
     }
     return info;
+  }
+
+  /**
+   * Extracts an inline "individual" coupon from a product detail page.
+   *
+   * Locates the `PromotionsDiscovery` container inside
+   * `#promoPriceBlockMessage_feature_div` whose `data-csa-c-item-id`
+   * encodes a promotion id (`amzn1.promotion.{ID}`). The terms URL is
+   * read from the `data-a-modal` JSON attribute of the nested
+   * `<span class="a-declarative">` wrapper (the `href` of the "Termos"
+   * link points to the product page, not the popover endpoint).
+   *
+   * If the page already contains a PSP-style coupon
+   * (`/promotion/psp/`), this method returns `null` so PSP coupons take
+   * precedence.
+   */
+  extractIndividualCouponInfo(html: string): IndividualCouponInfo | null {
+    // Prioritise PSP coupons — individual detection only applies when the
+    // product page has no /promotion/psp/ link.
+    if (this.extractCouponInfo(html) !== null) {
+      return null;
+    }
+
+    const $ = cheerio.load(html);
+
+    let result: IndividualCouponInfo | null = null;
+
+    $('[data-csa-c-owner="PromotionsDiscovery"][data-csa-c-item-id*="amzn1.promotion."]').each(
+      (_, el) => {
+        if (result) return;
+
+        const itemId = $(el).attr('data-csa-c-item-id') ?? '';
+        const promotionMatch = itemId.match(/amzn1\.promotion\.([A-Z0-9]+)/);
+        if (!promotionMatch) return;
+
+        const promotionId = promotionMatch[1];
+
+        // Coupon code: regex on the inline promo message text
+        const messageText = this.normalizeText(
+          $(el).find('[id^="promoMessageCXCW"]').first().text() || $(el).text(),
+        );
+        const codeMatch = messageText.match(/Insira\s+o\s+c[óo]digo\s+([A-Z0-9]{4,20})/i);
+        const couponCode = codeMatch?.[1] ?? null;
+
+        // termsUrl: parse JSON in data-a-modal of the declarative wrapper.
+        // The browser-saved HTML already decodes &quot; to " in the attribute,
+        // so JSON.parse succeeds on the raw attribute value.
+        let termsUrl: string | null = null;
+        const modalAttr = $(el).find('[data-a-modal]').first().attr('data-a-modal');
+        if (modalAttr) {
+          try {
+            const parsed = JSON.parse(modalAttr) as { url?: unknown };
+            if (typeof parsed.url === 'string' && parsed.url.length > 0) {
+              termsUrl = parsed.url;
+            }
+          } catch {
+            // Malformed JSON — fall back to null; terms are optional.
+          }
+        }
+
+        result = {
+          promotionId,
+          couponCode,
+          description: messageText || null,
+          termsUrl,
+          isIndividual: true,
+        };
+      },
+    );
+
+    return result;
+  }
+
+  /**
+   * Extracts the terms text from the HTML fragment returned by the
+   * individual coupon popover endpoint (`/promotion/details/popup/{ID}`).
+   *
+   * The Amazon popover ships a container whose id has the shape
+   * `promo_tnc_content_{PROMOTION_ID}_{RANDOM_SUFFIX}` — the suffix varies
+   * per render, so we match via `[id^="promo_tnc_content_"]`. The text
+   * inside is the human-readable list of rules, separated by `*` bullets,
+   * and often contains non-breaking spaces (`\u00a0`) in monetary values;
+   * both are normalised by `normalizeText` before returning.
+   */
+  extractIndividualCouponTerms(html: string): string | null {
+    const $ = cheerio.load(html);
+    const text = this.normalizeText($('[id^="promo_tnc_content_"]').first().text());
+    return text.length > 0 ? text : null;
   }
 
   /**
@@ -260,6 +353,7 @@ export class CheerioHtmlParser implements HtmlParser {
     const prime = this.extractPrime($);
     const { rating, reviewCount } = this.extractReviews($);
     const couponInfo = this.extractCouponInfo(html);
+    const individualCouponInfo = couponInfo === null ? this.extractIndividualCouponInfo(html) : null;
     const offerId = this.extractOfferId($);
     const { inStock, isPreOrder } = this.extractAvailability($, offerId, logger);
 
@@ -273,6 +367,7 @@ export class CheerioHtmlParser implements HtmlParser {
       reviewCount,
       hasCoupon: couponInfo !== null,
       couponInfo,
+      individualCouponInfo,
       url,
       offerId,
       inStock,

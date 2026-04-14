@@ -1,4 +1,4 @@
-export { HttpClient, HttpResponse } from './HttpClient';
+export { HttpClient, HttpGetOptions, HttpResponse } from './HttpClient';
 export { HtmlParser } from './HtmlParser';
 export { Logger } from './Logger';
 export { RetryPolicy, RetryContext, RetryDecision, RetryErrorType } from './RetryPolicy';

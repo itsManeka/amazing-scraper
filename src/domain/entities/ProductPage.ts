@@ -1,4 +1,5 @@
 import { CouponInfo } from './CouponInfo';
+import { IndividualCouponInfo } from './IndividualCouponInfo';
 
 /**
  * Represents the data extracted from a single Amazon product detail page.
@@ -30,6 +31,16 @@ export interface ProductPage {
   hasCoupon: boolean;
   /** Coupon promotion details, or `null` when no coupon is present. */
   couponInfo: CouponInfo | null;
+  /**
+   * Inline "individual" coupon details discovered on the product page when no
+   * PSP-style coupon was found. Populated only when `couponInfo` is `null` and
+   * the page renders a `PromotionsDiscovery` block with a "Termos" popover.
+   * `null` when no individual coupon is present.
+   *
+   * Individual coupons do not vinculate to any product and are never used for
+   * price calculation — they are persisted as standalone coupons (see F17).
+   */
+  individualCouponInfo?: IndividualCouponInfo | null;
   /** Canonical URL used to fetch this page. */
   url: string;
   /** Merchant ID from the buy-box seller (e.g. "A1ZZFT5FULY4LN" for Amazon BR). */

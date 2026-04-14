@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
-import { HttpClient, HttpResponse } from '../../application/ports/HttpClient';
+import { HttpClient, HttpGetOptions, HttpResponse } from '../../application/ports/HttpClient';
 import { Logger } from '../../application/ports/Logger';
 import * as querystring from 'querystring';
 
@@ -29,10 +29,33 @@ export class AxiosHttpClient implements HttpClient {
     );
   }
 
-  async get(url: string, headers?: Record<string, string>): Promise<HttpResponse> {
+  async get(
+    url: string,
+    headers?: Record<string, string>,
+    options?: HttpGetOptions,
+  ): Promise<HttpResponse> {
     this.logger.info('HTTP GET', { url });
 
-    const response = await this.client.get<string>(url, { headers });
+    const requestConfig: Record<string, unknown> = { headers };
+
+    // Defense-in-depth against SSRF via cross-host redirects:
+    // when an allowlist is provided, any redirect whose target hostname is
+    // not listed causes the underlying Axios follow-redirects call to throw.
+    if (options?.allowedRedirectHosts && options.allowedRedirectHosts.length > 0) {
+      const allowed = new Set(options.allowedRedirectHosts);
+      requestConfig.beforeRedirect = (
+        redirectOptions: { hostname?: string; host?: string },
+      ): void => {
+        const hostname = redirectOptions.hostname ?? redirectOptions.host;
+        if (!hostname || !allowed.has(hostname)) {
+          throw new Error(
+            `Redirect to disallowed host: ${hostname ?? '<unknown>'}`,
+          );
+        }
+      };
+    }
+
+    const response = await this.client.get<string>(url, requestConfig);
     this.logSafeCookies(url);
     return { status: response.status, data: response.data };
   }

@@ -21,6 +21,8 @@ function createMocks() {
 
   const htmlParser: jest.Mocked<HtmlParser> = {
     extractCouponInfo: jest.fn(),
+    extractIndividualCouponInfo: jest.fn(),
+    extractIndividualCouponTerms: jest.fn(),
     extractCsrfToken: jest.fn(),
     extractCouponMetadata: jest.fn(),
     extractProductInfo: jest.fn(),

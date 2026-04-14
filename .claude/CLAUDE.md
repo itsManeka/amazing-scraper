@@ -45,8 +45,9 @@ src/
 | `inStock` | `in_stock` |
 | `isPreOrder` | `preorder` |
 | `imageUrl` | `image` |
-| `hasCoupon`, `couponInfo` | `coupon` (via CouponScrapingService) |
+| `hasCoupon`, `couponInfo` | `coupon` (via CouponScrapingService) — tipo PRODUCT_LINKED |
 | `couponInfo.couponCode` | `coupon.coupon_code` (codigo alfanumerico, ex: "FJOVKLWWIZXM") |
+| `individualCouponInfo` (F17) | `coupon` (via CouponScrapingService) — tipo INDIVIDUAL, sem vinculacao a produtos |
 
 ## Comandos
 

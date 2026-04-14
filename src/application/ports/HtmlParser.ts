@@ -1,4 +1,4 @@
-import { CouponInfo, CouponMetadata, ProductPage } from '../../domain/entities';
+import { CouponInfo, CouponMetadata, IndividualCouponInfo, ProductPage } from '../../domain/entities';
 import { Logger } from './Logger';
 
 /**
@@ -10,6 +10,27 @@ export interface HtmlParser {
    * Returns `null` when no coupon link is found.
    */
   extractCouponInfo(html: string): CouponInfo | null;
+
+  /**
+   * Extracts inline "individual" coupon data from a product detail page.
+   * An individual coupon appears inside `#promoPriceBlockMessage_feature_div`
+   * with a `PromotionsDiscovery` owner and no `/promotion/psp/` link —
+   * typical of promotions whose terms are served via an AJAX popover.
+   * Returns `null` when no individual coupon is found. PSP-style coupons
+   * take precedence: callers should only consider the individual coupon
+   * when `extractCouponInfo` returned `null`.
+   */
+  extractIndividualCouponInfo(html: string): IndividualCouponInfo | null;
+
+  /**
+   * Extracts the terms text from the HTML fragment returned by the
+   * individual coupon popover endpoint (`/promotion/details/popup/{ID}`).
+   * The fragment contains a `[id^="promo_tnc_content_"]` element whose
+   * text holds the human-readable rules. The returned text is normalised
+   * (non-breaking spaces replaced and trimmed). Returns `null` when the
+   * selector is absent or yields only empty text.
+   */
+  extractIndividualCouponTerms(html: string): string | null;
 
   /**
    * Extracts the anti-CSRF token from a coupon promotion page.

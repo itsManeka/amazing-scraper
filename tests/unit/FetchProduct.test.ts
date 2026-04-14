@@ -42,6 +42,8 @@ function createMocks() {
 
   const htmlParser: jest.Mocked<HtmlParser> = {
     extractCouponInfo: jest.fn(),
+    extractIndividualCouponInfo: jest.fn(),
+    extractIndividualCouponTerms: jest.fn(),
     extractCsrfToken: jest.fn(),
     extractCouponMetadata: jest.fn(),
     extractProductInfo: jest.fn(),
@@ -161,6 +163,34 @@ describe('FetchProduct', () => {
 
       expect(result.hasCoupon).toBe(true);
       expect(result.couponInfo?.promotionId).toBe('PROMO123');
+    });
+
+    it('returns individualCouponInfo when parser detects an inline individual coupon', async () => {
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks);
+
+      const pageWithIndividual: ProductPage = {
+        ...PRODUCT_PAGE,
+        hasCoupon: false,
+        couponInfo: null,
+        individualCouponInfo: {
+          promotionId: 'ATVO4IBO0PTIE',
+          couponCode: 'VEMNOAPP',
+          description: 'off.Insira o código VEMNOAPP na hora do pagamento.',
+          termsUrl: '/promotion/details/popup/ATVO4IBO0PTIE?ref=x',
+          isIndividual: true,
+        },
+      };
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>individual coupon</html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(pageWithIndividual);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result.couponInfo).toBeNull();
+      expect(result.individualCouponInfo).not.toBeNull();
+      expect(result.individualCouponInfo!.promotionId).toBe('ATVO4IBO0PTIE');
+      expect(result.individualCouponInfo!.couponCode).toBe('VEMNOAPP');
     });
   });
 
