@@ -78,5 +78,6 @@ A tag de afiliado **não** é aplicada aqui — responsabilidade do consumidor (
 
 ## Indice
 
-- [Agentes](agents/INDEX.md) — scraper-developer
 - [Skills](skills/INDEX.md) — add-scraper, run-tests
+
+Agente `scraper-developer` e global do workspace.
