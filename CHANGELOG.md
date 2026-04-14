@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.9.0...v1.10.0) (2026-04-14)
+
+
+### Features
+
+* **scraper:** individual coupon detection and terms fetch with SSRF guard ([f284b84](https://github.com/itsmaneka/amazing-scraper/commit/f284b844324a08e47932bb1ce3896bef4412b34e))
+
 # [1.9.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.8.1...v1.9.0) (2026-04-13)
 
 
