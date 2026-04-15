@@ -180,11 +180,16 @@ describe('FetchIndividualCouponTerms', () => {
 
   describe('with real CheerioHtmlParser and nock (endpoint fragment fixture)', () => {
     let fragment: string;
+    let lampadaFragment: string;
 
     beforeAll(() => {
       const fixturesDir = path.join(__dirname, '..', 'fixtures');
       fragment = fs.readFileSync(
         path.join(fixturesDir, 'terms-popup-fragment.html'),
+        'utf-8',
+      );
+      lampadaFragment = fs.readFileSync(
+        path.join(fixturesDir, 'terms-popup-lampada.html'),
         'utf-8',
       );
     });
@@ -216,6 +221,22 @@ describe('FetchIndividualCouponTerms', () => {
       );
       return { useCase, logger };
     }
+
+    it('F21: returns non-null terms string when endpoint serves the lampada popover fragment', async () => {
+      nock(AMAZON_BASE)
+        .get(TERMS_PATH)
+        .query(true)
+        .reply(200, lampadaFragment);
+
+      const { useCase } = createRealUseCase();
+      const result = await useCase.execute(TERMS_URL);
+
+      expect(result).not.toBeNull();
+      expect(typeof result).toBe('string');
+      expect(result!.length).toBeGreaterThan(100);
+      expect(result).not.toContain('\u00a0');
+      expect(result!.startsWith('* Promoção válida exclusivamente')).toBe(true);
+    });
 
     it('returns non-empty string containing "Válido até" when endpoint serves the fragment', async () => {
       nock(AMAZON_BASE)

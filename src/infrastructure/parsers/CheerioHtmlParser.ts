@@ -201,17 +201,85 @@ export class CheerioHtmlParser implements HtmlParser {
    * Extracts the terms text from the HTML fragment returned by the
    * individual coupon popover endpoint (`/promotion/details/popup/{ID}`).
    *
-   * The Amazon popover ships a container whose id has the shape
-   * `promo_tnc_content_{PROMOTION_ID}_{RANDOM_SUFFIX}` — the suffix varies
-   * per render, so we match via `[id^="promo_tnc_content_"]`. The text
-   * inside is the human-readable list of rules, separated by `*` bullets,
-   * and often contains non-breaking spaces (`\u00a0`) in monetary values;
-   * both are normalised by `normalizeText` before returning.
+   * Two shapes are supported:
+   *
+   * 1. Post-JS DOM (fixture extracted from a rendered page or a popover that
+   *    Amazon already populated): the `<span id="promo_tnc_content_{ID}_{SUFFIX}">`
+   *    already contains the rendered rules text. Matched via
+   *    `[id^="promo_tnc_content_"]`.
+   *
+   * 2. Raw server response from `/promotion/details/popup/{ID}`: the span is
+   *    empty and the text lives inline inside a `<script>` that invokes
+   *    `tncComponent.renderTnC({"tncSectionContentMap":{"TNC_CONTENT": "..."}})`.
+   *    Requires parsing the script JSON and then stripping residual HTML tags
+   *    that may appear inside `TNC_CONTENT` (e.g. `<br>`, `<span>`).
+   *
+   * Normalisation (`\u00a0` → space, trim) is applied after extraction.
    */
   extractIndividualCouponTerms(html: string): string | null {
     const $ = cheerio.load(html);
-    const text = this.normalizeText($('[id^="promo_tnc_content_"]').first().text());
-    return text.length > 0 ? text : null;
+
+    const spanText = this.normalizeText($('[id^="promo_tnc_content_"]').first().text());
+    if (spanText.length > 0) {
+      return spanText;
+    }
+
+    const scriptText = this.extractTermsFromRenderTnCScript($);
+    return scriptText && scriptText.length > 0 ? scriptText : null;
+  }
+
+  /**
+   * Fallback extractor for the raw popover response: iterates over every
+   * inline `<script>` located by Cheerio, applies a non-greedy regex to
+   * isolate the first `tncComponent.renderTnC({...})` invocation, and
+   * `JSON.parse`s its argument.
+   *
+   * The regex runs against a single `<script>` body at a time (bounded
+   * input) rather than the full HTML document. This caps the worst-case
+   * regex work per script and keeps pathological / malformed documents
+   * from blowing up the parser (ReDoS hardening). The regex itself still
+   * relies on the JS engine's native backtracking to locate the matching
+   * `}\s*)` — intentional and safe given the bounded input.
+   *
+   * After parsing, `tncSectionContentMap.TNC_CONTENT` is read, residual
+   * HTML tags (`<br>`, `<span>`, ...) are stripped, and `normalizeText`
+   * is applied.
+   *
+   * Returns `null` when:
+   *   - no script contains a `renderTnC` call;
+   *   - the JSON argument is malformed;
+   *   - `tncSectionContentMap` / `TNC_CONTENT` is absent or empty.
+   */
+  private extractTermsFromRenderTnCScript($: cheerio.CheerioAPI): string | null {
+    const scripts = $('script').map((_, el) => $(el).html() || '').get();
+
+    for (const script of scripts) {
+      const match = script.match(/tncComponent\.renderTnC\(\s*(\{[\s\S]*?\})\s*\)/);
+      if (!match?.[1]) continue;
+
+      let payload: unknown;
+      try {
+        payload = JSON.parse(match[1]);
+      } catch {
+        // Malformed JSON in this script — keep searching other scripts.
+        continue;
+      }
+
+      const contentMap = (payload as { tncSectionContentMap?: unknown })?.tncSectionContentMap;
+      if (!contentMap || typeof contentMap !== 'object') continue;
+
+      const raw = (contentMap as Record<string, unknown>).TNC_CONTENT;
+      if (typeof raw !== 'string' || raw.length === 0) continue;
+
+      // Strip residual HTML tags (Amazon occasionally embeds <br>, <span>, etc.)
+      const stripped = raw.replace(/<[^>]+>/g, '');
+      const normalised = this.normalizeText(stripped);
+      if (normalised.length > 0) {
+        return normalised;
+      }
+    }
+
+    return null;
   }
 
   /**

@@ -27,13 +27,15 @@ src/
   domain/entities/       Product, ProductPage, CouponInfo (couponCode: string | null), CouponResult
   domain/errors/         ScraperError
   application/ports/     HttpClient, HtmlParser, Logger, RetryPolicy
-  application/use-cases/ FetchProduct, ExtractCouponProducts, FetchPreSales
+  application/use-cases/ FetchProduct, ExtractCouponProducts, FetchPreSales, FetchIndividualCouponTerms
   infrastructure/
     http/                AxiosHttpClient, RotatingUserAgentProvider
-    parsers/             CheerioHtmlParser (extractCouponCode via regex /com o cupom\s+([A-Z0-9]{6,})/i)
+    parsers/             CheerioHtmlParser (extractCouponCode via regex /com o cupom\s+([A-Z0-9]{6,})/i; extractIndividualCouponTerms via [id^="promo_tnc_content_"])
     logger/              ConsoleLogger
     retry/               ExponentialBackoffRetry
 ```
+
+**F21 — Extracao de `terms_text`:** `FetchIndividualCouponTerms.execute(termsUrl)` busca o endpoint `/promotion/details/popup/{ID}` e retorna texto de regras. Fallback `extractTermsFromRenderTnCScript` para popovers renderizados via JS embutido em `<script>`. ReDoS mitigado isolando scripts antes de regex. Fixture `terms-popup-lampada.html` para testes.
 
 ## Mapeamento para GibiPromo
 

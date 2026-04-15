@@ -1,0 +1,233 @@
+
+
+
+<div id="promo_tnc_popup_container_ATVO4IBO0PTIE_st">
+   
+
+
+
+
+<script>
+let tncFallbackUrl = "/promotion/details/ATVO4IBO0PTIE?backButton=1";
+if (tncFallbackUrl && !window.P) {
+    
+    
+    
+    window.location.replace(tncFallbackUrl);
+} else {
+
+    const isRegistered_ATVO4IBO0PTIE_st = (moduleName) => {
+        let isRegistered = false;
+        window.P.now(moduleName).execute(function (module) {
+            isRegistered = !!module;
+        });
+        return isRegistered;
+    }
+
+    
+    if (!isRegistered_ATVO4IBO0PTIE_st("promo_tnc_render_ATVO4IBO0PTIE_st")) {
+        window.P.when('jQuery').register("promo_tnc_render_ATVO4IBO0PTIE_st", function ($) {
+            
+            return {
+                renderPageTitle: function (tnc) {
+                    if (tnc["tncSectionContentMap"]["TNC_TITLE"] != undefined) {
+                        $("#tnc_page_title").text(tnc["tncSectionContentMap"]["TNC_TITLE"]);
+                    } else if (tnc["tncSectionContentMap"]["COUPON_TITLE"] != undefined) {
+                        $("#tnc_page_title").text(tnc["tncSectionContentMap"]["COUPON_TITLE"]);
+                    } else {
+                        $("#tnc_page_title").text("Promotion Terms");
+                    }
+                },
+
+                renderTnC: function (tnc) {
+                    if (tnc["tncSectionContentMap"]["TNC_TITLE"] != undefined) {
+                        $("#tnc_title_ATVO4IBO0PTIE_st").html(tnc["tncSectionContentMap"]["TNC_TITLE"]);
+                    }
+                    if (tnc["tncSectionContentMap"]["COUPON_TITLE"] != undefined) {
+                        $("#promotion_title_ATVO4IBO0PTIE_st").html(tnc["tncSectionContentMap"]["COUPON_TITLE"]);
+                    }
+                    if (tnc["tncSectionContentMap"]["SAVING_INFO"] != undefined) {
+                        $("#saving_info_ATVO4IBO0PTIE_st").html(tnc["tncSectionContentMap"]["SAVING_INFO"]);
+                    }
+                    if (tnc["tncSectionContentMap"]["EXPIRATION"] != undefined) {
+                        $("#expiration_ATVO4IBO0PTIE_st").html(tnc["tncSectionContentMap"]["EXPIRATION"]);
+                    }
+                    if (tnc["tncSectionContentMap"]["SEE_MORE_COUPONS"] != undefined) {
+                        $("#see_more_coupons_ATVO4IBO0PTIE_st").html(tnc["tncSectionContentMap"]["SEE_MORE_COUPONS"]);
+                    }
+                    if (tnc["tncSectionContentMap"]["TNC_CONTENT"] != undefined) {
+                        $("#promo_tnc_content_ATVO4IBO0PTIE_st").html(tnc["tncSectionContentMap"]["TNC_CONTENT"]);
+                    }
+                },
+                renderError: function (errorMessage) {
+                    $("#promo_tnc_error_container_ATVO4IBO0PTIE_st").show();
+                    $("#error_message_ATVO4IBO0PTIE_st").html(errorMessage);
+                },
+            }
+        });
+    }
+
+    window.P.when("promo_tnc_render_ATVO4IBO0PTIE_st", 'ready').execute(function (tncComponent) {
+        if ("false" != "true") {
+            tncComponent.renderPageTitle({"tncSectionContentMap":{"TNC_TITLE":"Termos da promoção","TNC_CONTENT":"* Promoção válida exclusivamente para compras na loja Amazon do Brasil (http://www.amazon.com.br).\n* Esta promoção se aplica somente aos clientes que estão comprando no aplicativo Amazon Shopping pela primeira vez.\n* Esta promoção somente poderá ser utilizada para compra de produtos físicos através do aplicativo Amazon Shopping.\n* Taxas de frete aplicáveis conforme política vigente no momento da compra.\n* Esta promoção não é válida para conteúdo digital, como eBooks.\n* Cada cliente/conta poderá usufruir desta promoção apenas uma vez, em um único pedido.\n* A oferta é válida para pedidos a partir de R$ 80 (oitenta reais) de produtos elegíveis, excluindo custos de envio e de embalagem para presente.\n* No caso de devolução parcial, a promoção será aplicada apenas ao total dos produtos não devolvidos, desde que o valor seja igual ou superior a R$ 80.\n* O preço exibido na página de detalhes de cada um dos produtos elegíveis será o valor integral, sem o desconto.\n* O benefício máximo que você pode receber com esta promoção é limitado a R$ 20 (vinte reais).\n* Válido até 30 de abril de 2026 às 23:59. Créditos não utilizados até a data limite perderão a validade.\n* Em caso de devolução de algum produto adquirido nesta promoção, o valor a ser reembolsado será o efetivamente pago, e não o valor original do produto fora da promoção.\n* Itens colocados no Carrinho cuja compra não seja concluída durante o período da promoção deixarão de ser elegíveis após o término da promoção.\n* Esta promoção pode ser revogada ou alterada a qualquer momento pela Amazon.com.br.\n* Para usufruir desta promoção, é necessário ter uma conta válida na Amazon.com.br, o aplicativo Amazon Shopping em seu smartphone e uma forma de pagamento válida vinculada a essa conta, além das demais condições descritas acima.\n* Esta oferta é individual e intransferível, não podendo ser vendida ou resgatada em dinheiro.\n* Para fins de emissão de recibo ou outro documento fiscal, o valor equivalente ao desconto concedido poderá ser distribuído entre diversos produtos.\n* Em caso de violação de qualquer destes termos e condições, a promoção perderá a validade."}});
+            tncComponent.renderTnC({"tncSectionContentMap":{"TNC_TITLE":"Termos da promoção","TNC_CONTENT":"* Promoção válida exclusivamente para compras na loja Amazon do Brasil (http://www.amazon.com.br).\n* Esta promoção se aplica somente aos clientes que estão comprando no aplicativo Amazon Shopping pela primeira vez.\n* Esta promoção somente poderá ser utilizada para compra de produtos físicos através do aplicativo Amazon Shopping.\n* Taxas de frete aplicáveis conforme política vigente no momento da compra.\n* Esta promoção não é válida para conteúdo digital, como eBooks.\n* Cada cliente/conta poderá usufruir desta promoção apenas uma vez, em um único pedido.\n* A oferta é válida para pedidos a partir de R$ 80 (oitenta reais) de produtos elegíveis, excluindo custos de envio e de embalagem para presente.\n* No caso de devolução parcial, a promoção será aplicada apenas ao total dos produtos não devolvidos, desde que o valor seja igual ou superior a R$ 80.\n* O preço exibido na página de detalhes de cada um dos produtos elegíveis será o valor integral, sem o desconto.\n* O benefício máximo que você pode receber com esta promoção é limitado a R$ 20 (vinte reais).\n* Válido até 30 de abril de 2026 às 23:59. Créditos não utilizados até a data limite perderão a validade.\n* Em caso de devolução de algum produto adquirido nesta promoção, o valor a ser reembolsado será o efetivamente pago, e não o valor original do produto fora da promoção.\n* Itens colocados no Carrinho cuja compra não seja concluída durante o período da promoção deixarão de ser elegíveis após o término da promoção.\n* Esta promoção pode ser revogada ou alterada a qualquer momento pela Amazon.com.br.\n* Para usufruir desta promoção, é necessário ter uma conta válida na Amazon.com.br, o aplicativo Amazon Shopping em seu smartphone e uma forma de pagamento válida vinculada a essa conta, além das demais condições descritas acima.\n* Esta oferta é individual e intransferível, não podendo ser vendida ou resgatada em dinheiro.\n* Para fins de emissão de recibo ou outro documento fiscal, o valor equivalente ao desconto concedido poderá ser distribuído entre diversos produtos.\n* Em caso de violação de qualquer destes termos e condições, a promoção perderá a validade."}});
+        }
+        if ("true" != "true") {
+            tncComponent.renderError("");
+        }
+    });
+}
+</script>
+
+<style>
+  
+  
+  
+  @media only screen and (min-width: 600px) {
+
+    #promo_tncPage_ATVO4IBO0PTIE_st * {
+      font-family: "Amazon Ember";
+      font-size: 13px;
+    }
+
+    #promo_tncPage_ATVO4IBO0PTIE_st {
+      padding-bottom: 14px;
+    }
+
+    #promo_tncPage_ATVO4IBO0PTIE_st div > strong {
+      font-size: 13px;
+      margin-top: 14px;
+      display: block;
+    }
+
+    #promo_tncPage_ATVO4IBO0PTIE_st li {
+      margin-top: 0px;
+      margin-bottom: 0px;
+    }
+
+    #promo_tncPage_ATVO4IBO0PTIE_st ul,
+    #promo_tncPage_ATVO4IBO0PTIE_st ol {
+      font-size: 13px;
+      padding-left: 14px;
+      margin-top: 0px;
+      margin-bottom: 0px;
+    }
+
+    #promo_tnc_container_ATVO4IBO0PTIE_st {
+      margin: 14px 18px;
+    }
+
+    .tnc_title_ATVO4IBO0PTIE_st {
+      margin-bottom: 14px;
+    }
+
+    .promo_tnc_content_ATVO4IBO0PTIE_st {
+      margin-top: 14px;
+    }
+
+    #promo_tnc_error_container_ATVO4IBO0PTIE_st {
+      margin: 14px 28px;
+    }
+
+    #promo_tnc_popup_container_ATVO4IBO0PTIE_st {
+      max-height: 560px;
+      max-width: 512px;
+    }
+
+    .hidden_content_ATVO4IBO0PTIE_st {
+      display: none;
+    }
+
+    /* for EU coupon style adaption starts */
+    #promo_tncPage_ATVO4IBO0PTIE_st p,
+    #promo_tncPage_ATVO4IBO0PTIE_st p + p {
+      margin-top: 0px;
+      margin-bottom: 0px;
+    }
+
+    #promo_tncPage_ATVO4IBO0PTIE_st ol + p {
+      margin-top: 14px;
+    }
+  }
+
+  /* for EU coupon style adaption ends */
+
+  /* For responsive rendering */
+  /* Apply when the width of the window is less than 600px */
+  @media only screen and (max-width: 600px) {
+
+    #promo_tncPage_ATVO4IBO0PTIE_st * {
+      font-family: "Amazon Ember";
+      font-size: 15px;
+    }
+
+    #promo_tncPage_ATVO4IBO0PTIE_st div > strong {
+      font-size: 15px;
+      margin-top: 13px;
+      display: block;
+    }
+
+    #promo_tncPage_ATVO4IBO0PTIE_st li {
+      margin-top: 0px;
+      margin-bottom: 0px;
+    }
+
+    #promo_tncPage_ATVO4IBO0PTIE_st ul,
+    #promo_tncPage_ATVO4IBO0PTIE_st ol {
+      font-size: 15px;
+      padding-left: 13px;
+      margin-top: 0px;
+      margin-bottom: 13px;
+    }
+
+    #promo_tnc_container_ATVO4IBO0PTIE_st {
+      margin: 13px 17px;
+    }
+
+    .tnc_title_ATVO4IBO0PTIE_st {
+      margin-bottom: 24px;
+    }
+
+    .promo_tnc_content_ATVO4IBO0PTIE_st {
+      margin-top: 13px;
+    }
+
+    #promo_tnc_error_container_ATVO4IBO0PTIE_st {
+      margin: 13px 27px;
+    }
+
+    .hidden_content_ATVO4IBO0PTIE_st {
+      display: none;
+    }
+
+    /* for EU coupon style adaption starts */
+    #promo_tncPage_ATVO4IBO0PTIE_st p,
+    #promo_tncPage_ATVO4IBO0PTIE_st p + p {
+      margin-top: 0px;
+      margin-bottom: 0px;
+    }
+
+    #promo_tncPage_ATVO4IBO0PTIE_st ol + p {
+      margin-top: 13px;
+    }
+
+    /* for EU coupon style adaption ends */
+  }
+</style>
+<div id="promo_tncPage_ATVO4IBO0PTIE_st">
+  <div id="promo_tnc_container_ATVO4IBO0PTIE_st">
+    
+    <div class="tnc_title_ATVO4IBO0PTIE_st"><h1 id="tnc_title_ATVO4IBO0PTIE_st" aria-level="4" class="a-size-medium a-text-bold" role="heading"></h1></div>
+    <div class="promotion_title_ATVO4IBO0PTIE_st"><span id="promotion_title_ATVO4IBO0PTIE_st" class="a-size-base a-text-bold"></span></div>
+    <div class="saving_info_ATVO4IBO0PTIE_st"><span id="saving_info_ATVO4IBO0PTIE_st" class="a-size-base"></span></div>
+    <div class="expiration_ATVO4IBO0PTIE_st"><span id="expiration_ATVO4IBO0PTIE_st" class="a-size-base"></span></div>
+    <div class="see_more_coupons_ATVO4IBO0PTIE_st"><span id="see_more_coupons_ATVO4IBO0PTIE_st" class="a-size-base"></span></div>
+    <div class="promo_tnc_content_ATVO4IBO0PTIE_st"><span id="promo_tnc_content_ATVO4IBO0PTIE_st" class="a-size-base"></span></div>
+  </div>
+  <div id="promo_tnc_error_container_ATVO4IBO0PTIE_st" class="hidden_content_ATVO4IBO0PTIE_st">
+    <div class="a-box a-alert a-alert-warning a-spacing-large a-spacing-top-large" aria-live="polite" aria-atomic="true"><div class="a-box-inner a-alert-container"><i class="a-icon a-icon-alert" aria-hidden="true"></i><div class="a-alert-content">
+      <div id="error_message_ATVO4IBO0PTIE_st"></div>
+    </div></div></div>
+  </div>
+</div>
+</div>
