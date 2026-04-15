@@ -26,8 +26,13 @@ export interface IndividualCouponInfo {
    */
   couponCode: string | null;
   /**
-   * Full human-readable message shown in the inline block (normalised text).
-   * `null` when the message container is empty.
+   * Discount text extracted from the badge element adjacent to promoMessageCXCW
+   * (e.g. "R$20", "20%"). `null` when the badge element is not found.
+   */
+  discountText: string | null;
+  /**
+   * Human-readable message shown in the inline block (normalised text),
+   * without the leading "off." prefix. `null` when the message container is empty.
    */
   description: string | null;
   /**

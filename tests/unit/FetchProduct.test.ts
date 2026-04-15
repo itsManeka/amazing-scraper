@@ -176,7 +176,8 @@ describe('FetchProduct', () => {
         individualCouponInfo: {
           promotionId: 'ATVO4IBO0PTIE',
           couponCode: 'VEMNOAPP',
-          description: 'off.Insira o código VEMNOAPP na hora do pagamento.',
+          discountText: 'R$20',
+          description: 'Insira o código VEMNOAPP na hora do pagamento.',
           termsUrl: '/promotion/details/popup/ATVO4IBO0PTIE?ref=x',
           isIndividual: true,
         },

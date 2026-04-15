@@ -54,6 +54,25 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       expect(result).not.toBeNull();
       expect(result!.isIndividual).toBe(true);
     });
+
+    it('extrai discountText "R$20" do elemento label badge', () => {
+      const result = parser.extractIndividualCouponInfo(productWithIndividualCouponHtml);
+      expect(result).not.toBeNull();
+      expect(result!.discountText).toMatch(/R\$\s*20/);
+    });
+
+    it('retorna description sem o prefixo "off." inicial', () => {
+      const result = parser.extractIndividualCouponInfo(productWithIndividualCouponHtml);
+      expect(result).not.toBeNull();
+      expect(result!.description).not.toMatch(/^off\./i);
+      expect(result!.description).toContain('Insira o c');
+    });
+
+    it('description nao contem "Termos" como sufixo', () => {
+      const result = parser.extractIndividualCouponInfo(productWithIndividualCouponHtml);
+      expect(result).not.toBeNull();
+      expect(result!.description).not.toMatch(/Termos\s*$/);
+    });
   });
 
   describe('returns null when no individual coupon is present', () => {
@@ -99,6 +118,7 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       expect(result!.promotionId).toBe('PROMOXYZ123');
       expect(result!.couponCode).toBe('ABCDEF');
       expect(result!.termsUrl).toBeNull();
+      expect(result!.discountText).toBeNull();
     });
 
     it('extracts termsUrl from data-a-modal JSON on inline HTML', () => {
@@ -124,6 +144,7 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       expect(result!.promotionId).toBe('PROMOABC');
       expect(result!.couponCode).toBe('XYZ123');
       expect(result!.termsUrl).toBe('/promotion/details/popup/PROMOABC?ref=x');
+      expect(result!.discountText).toBeNull();
     });
 
     it('returns couponCode: null when the inline message does not contain a code', () => {
@@ -141,6 +162,7 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       const result = parser.extractIndividualCouponInfo(html);
       expect(result).not.toBeNull();
       expect(result!.couponCode).toBeNull();
+      expect(result!.discountText).toBeNull();
     });
 
     it('handles invalid JSON in data-a-modal gracefully (termsUrl = null)', () => {
@@ -163,6 +185,7 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       const result = parser.extractIndividualCouponInfo(html);
       expect(result).not.toBeNull();
       expect(result!.termsUrl).toBeNull();
+      expect(result!.discountText).toBeNull();
     });
 
     it('returns the first individual coupon when multiple are present', () => {
@@ -185,6 +208,7 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       const result = parser.extractIndividualCouponInfo(html);
       expect(result).not.toBeNull();
       expect(result!.promotionId).toBe('FIRST000');
+      expect(result!.discountText).toBeNull();
     });
   });
 
@@ -199,6 +223,7 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       expect(page.individualCouponInfo).not.toBeNull();
       expect(page.individualCouponInfo!.promotionId).toBe('ATVO4IBO0PTIE');
       expect(page.individualCouponInfo!.couponCode).toBe('VEMNOAPP');
+      expect(page.individualCouponInfo!.discountText).toMatch(/R\$\s*20/);
     });
 
     it('leaves individualCouponInfo null when couponInfo (PSP) is present', () => {

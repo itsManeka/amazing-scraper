@@ -161,12 +161,26 @@ export class CheerioHtmlParser implements HtmlParser {
 
         const promotionId = promotionMatch[1];
 
-        // Coupon code: regex on the inline promo message text
-        const messageText = this.normalizeText(
+        // 1. discountText: badge element (label) adjacent to promoMessageCXCW
+        const rawDiscountText =
+          this.normalizeText($(el).find('label').first().text()) ||
+          this.normalizeText($(el).find('.recommended-discovery').first().text()) ||
+          null;
+        const discountText = rawDiscountText && rawDiscountText.length > 0 ? rawDiscountText : null;
+
+        // 2. Coupon code and cleaned description from the inline promo message
+        const rawMessageText = this.normalizeText(
           $(el).find('[id^="promoMessageCXCW"]').first().text() || $(el).text(),
         );
-        const codeMatch = messageText.match(/Insira\s+o\s+c[óo]digo\s+([A-Z0-9]{4,20})/i);
+        const codeMatch = rawMessageText.match(/Insira\s+o\s+c[óo]digo\s+([A-Z0-9]{4,20})/i);
         const couponCode = codeMatch?.[1] ?? null;
+
+        // Remove leading "off." prefix and trailing "Termos" from description
+        const cleanedMessage = rawMessageText
+          .replace(/^\s*off\.\s*/i, '')
+          .replace(/\s*Termos\s*$/, '')
+          .trim();
+        const description = cleanedMessage.length > 0 ? cleanedMessage : null;
 
         // termsUrl: parse JSON in data-a-modal of the declarative wrapper.
         // The browser-saved HTML already decodes &quot; to " in the attribute,
@@ -187,7 +201,8 @@ export class CheerioHtmlParser implements HtmlParser {
         result = {
           promotionId,
           couponCode,
-          description: messageText || null,
+          discountText,
+          description,
           termsUrl,
           isIndividual: true,
         };
