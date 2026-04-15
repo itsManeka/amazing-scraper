@@ -136,6 +136,23 @@ const next = await scraper.fetchPreSales({ stopAtAsin: lastSeen });
 console.log(`${next.asins.length} new pre-sale ASINs found`);
 ```
 
+### `IndividualCouponInfo`
+
+Information extracted from an inline "individual" coupon shown directly on the product page (not a coupon with a dedicated `/promotion/psp/` page and participating product list). Individual coupons are never linked to any product and must not be used for price calculation.
+
+```typescript
+interface IndividualCouponInfo {
+  promotionId: string;          // Extracted from data-csa-c-item-id
+  couponCode: string | null;    // e.g. "VEMNOAPP"
+  discountText: string | null;  // Badge value: "R$20", "20%", etc. (v1.11.0+)
+  description: string | null;   // Cleaned message text without "off." prefix
+  termsUrl: string | null;      // URL to fetch coupon terms/conditions
+  isIndividual: true;           // Discriminant
+}
+```
+
+**Breaking change in v1.11.0:** Added `discountText` field to capture the monetary/percentage badge value from the HTML structure. This field is `null` when the badge element is not found.
+
 ### `CouponMetadata`
 
 Metadata extracted from the coupon promotion page. All fields are nullable because the page may not always display them.

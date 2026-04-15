@@ -32,6 +32,8 @@ Decisoes por feature em `.claude/architecture/`. Padroes de parsing/ReDoS/fixtur
 
 ## Mapeamento para GibiPromo
 
+### ProductPage fields
+
 | amazing-scraper | GibiPromo Product |
 |-----------------|-------------------|
 | `asin` | `id` (PK) |
@@ -40,6 +42,13 @@ Decisoes por feature em `.claude/architecture/`. Padroes de parsing/ReDoS/fixtur
 | `inStock`, `isPreOrder` | `in_stock`, `preorder` |
 | `imageUrl` | `image` |
 | `hasCoupon`, `couponInfo` | `coupon` (via CouponScrapingService) |
+
+### IndividualCouponInfo fields (v1.11.0+)
+
+| Field | GibiPromo Coupon | Notes |
+|-------|------------------|-------|
+| `discountText` | usado na classificação | Concatenado com `description` para regex matching (e.g., "R$20 off Insira...") |
+| `description` | `title` + `description` | `discountText` é prefixado; helper `buildIndividualCouponTitle` monta título determinístico |
 
 Tag de afiliado NAO e aplicada aqui — responsabilidade do consumidor (`AmazonScraperFallbackClient`).
 
