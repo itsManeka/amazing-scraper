@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.10.1...v1.11.0) (2026-04-15)
+
+
+### Features
+
+* **f20:** add discountText field to IndividualCouponInfo and extract badge value in parser ([a5befeb](https://github.com/itsmaneka/amazing-scraper/commit/a5befeb3522bfaa305e629d74cd16bbf01a2262f))
+
 ## [1.10.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.10.0...v1.10.1) (2026-04-15)
 
 
