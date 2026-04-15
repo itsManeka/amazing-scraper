@@ -1,3 +1,10 @@
+## [1.10.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.10.0...v1.10.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* **parser:** extract terms_text from coupon popover correctly ([32091ca](https://github.com/itsmaneka/amazing-scraper/commit/32091cae0ab380d1f6f594df0b7ef431239ef5c4))
+
 # [1.10.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.9.0...v1.10.0) (2026-04-14)
 
 
