@@ -1,3 +1,10 @@
+## [1.11.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.11.0...v1.11.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* **parser:** clean CSS leak and parse "cupom: XXXX" pattern in coupon parser ([b3cd088](https://github.com/itsmaneka/amazing-scraper/commit/b3cd088c5039fe9da0e1261077c143ce412ca7a4))
+
 # [1.11.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.10.1...v1.11.0) (2026-04-15)
 
 
