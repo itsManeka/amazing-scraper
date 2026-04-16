@@ -6,6 +6,8 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
   let parser: CheerioHtmlParser;
   let productWithIndividualCouponHtml: string;
   let productPageWithCouponHtml: string;
+  let newProductHtml: string;
+  let productCupomHandlerHtml: string;
 
   beforeAll(() => {
     const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -15,6 +17,14 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
     );
     productPageWithCouponHtml = fs.readFileSync(
       path.join(fixturesDir, 'product-page-with-coupon.html'),
+      'utf-8',
+    );
+    newProductHtml = fs.readFileSync(
+      path.join(fixturesDir, 'new-product.html'),
+      'utf-8',
+    );
+    productCupomHandlerHtml = fs.readFileSync(
+      path.join(fixturesDir, 'product-cupom-handler.html'),
       'utf-8',
     );
   });
@@ -209,6 +219,39 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       expect(result).not.toBeNull();
       expect(result!.promotionId).toBe('FIRST000');
       expect(result!.discountText).toBeNull();
+    });
+  });
+
+  describe('real fixture: new-product.html (Ticket to Ride, B07BHW19H6 — CSS/Termos leak bug)', () => {
+    it('description equals expected text without "Termos" nor CSS leak', () => {
+      const result = parser.extractIndividualCouponInfo(newProductHtml);
+      expect(result).not.toBeNull();
+      expect(result!.description).toBe(
+        'Insira o código VEMNOAPP na hora do pagamento.  Válido na sua primeira compra no app',
+      );
+    });
+
+    it('extracts couponCode VEMNOAPP', () => {
+      const result = parser.extractIndividualCouponInfo(newProductHtml);
+      expect(result).not.toBeNull();
+      expect(result!.couponCode).toBe('VEMNOAPP');
+    });
+  });
+
+  describe('real fixture: product-cupom-handler.html (AUXOM Potes Herméticos — cupom: XXXX pattern bug)', () => {
+    it('extracts couponCode OLHACUPOM from "cupom: XXXX" pattern', () => {
+      const result = parser.extractIndividualCouponInfo(productCupomHandlerHtml);
+      expect(result).not.toBeNull();
+      expect(result!.couponCode).toBe('OLHACUPOM');
+    });
+
+    it('description does not contain CSS, "Termos" nor inline style content', () => {
+      const result = parser.extractIndividualCouponInfo(productCupomHandlerHtml);
+      expect(result).not.toBeNull();
+      expect(result!.description).not.toMatch(/Termos/);
+      expect(result!.description).not.toMatch(/padding-left/);
+      expect(result!.description).not.toMatch(/data-selector/);
+      expect(result!.description).not.toMatch(/\{/);
     });
   });
 

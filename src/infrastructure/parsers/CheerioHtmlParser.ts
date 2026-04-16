@@ -169,11 +169,17 @@ export class CheerioHtmlParser implements HtmlParser {
         const discountText = rawDiscountText && rawDiscountText.length > 0 ? rawDiscountText : null;
 
         // 2. Coupon code and cleaned description from the inline promo message
-        const rawMessageText = this.normalizeText(
-          $(el).find('[id^="promoMessageCXCW"]').first().text() || $(el).text(),
-        );
-        const codeMatch = rawMessageText.match(/Insira\s+o\s+c[óo]digo\s+([A-Z0-9]{4,20})/i);
-        const couponCode = codeMatch?.[1] ?? null;
+        // Clone the element and remove <style>/<script> before calling .text() to prevent
+        // CSS rules injected by Amazon from leaking into the description text.
+        const promoMessageEl = $(el).find('[id^="promoMessageCXCW"]').first();
+        const promoMessageText = promoMessageEl.length > 0
+          ? promoMessageEl.clone().find('style, script').remove().end().text()
+          : $(el).clone().find('style, script').remove().end().text();
+        const rawMessageText = this.normalizeText(promoMessageText);
+        const codeMatch =
+          rawMessageText.match(/Insira\s+o\s+c[óo]digo\s+([A-Z0-9]{4,20})/i) ??
+          rawMessageText.match(/cupom:\s*([A-Z0-9]{4,20})/i);
+        const couponCode = codeMatch?.[1]?.toUpperCase() ?? null;
 
         // Remove leading "off." prefix and trailing "Termos" from description
         const cleanedMessage = rawMessageText
