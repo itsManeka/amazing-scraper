@@ -1,3 +1,10 @@
+## [1.12.2](https://github.com/itsmaneka/amazing-scraper/compare/v1.12.1...v1.12.2) (2026-04-17)
+
+
+### Bug Fixes
+
+* **parser:** reject pre-order informative promos as individual coupons ([0b0cd25](https://github.com/itsmaneka/amazing-scraper/commit/0b0cd25b27b176abe650fe02a49965a1ac0fba4e))
+
 ## [1.12.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.12.0...v1.12.1) (2026-04-17)
 
 
