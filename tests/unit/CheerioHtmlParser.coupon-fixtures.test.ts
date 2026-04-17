@@ -7,6 +7,7 @@ describe('CheerioHtmlParser — coupon fixtures', () => {
   let couponPageHtml: string;
   let productPageWithCouponHtml: string;
   let couponPageFixedOffHtml: string;
+  let productCupomHandlerHtml: string;
 
   beforeAll(() => {
     const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -20,6 +21,10 @@ describe('CheerioHtmlParser — coupon fixtures', () => {
     );
     couponPageFixedOffHtml = fs.readFileSync(
       path.join(fixturesDir, 'coupon-page-fixed-off.html'),
+      'utf-8',
+    );
+    productCupomHandlerHtml = fs.readFileSync(
+      path.join(fixturesDir, 'product-cupom-handler.html'),
       'utf-8',
     );
   });
@@ -84,6 +89,25 @@ describe('CheerioHtmlParser — coupon fixtures', () => {
     it('returns null when html has no coupon link', () => {
       const htmlNoCoupon = '<html><body><p>No promotion links here</p></body></html>';
       expect(parser.extractCouponInfo(htmlNoCoupon)).toBeNull();
+    });
+  });
+
+  describe('extractCouponInfo (product-cupom-handler.html — JS handler false positive bug)', () => {
+    it('detects PSP coupon promotionId A2H4XVUW6JIA5J', () => {
+      const result = parser.extractCouponInfo(productCupomHandlerHtml);
+      expect(result).not.toBeNull();
+      expect(result!.promotionId).toBe('A2H4XVUW6JIA5J');
+    });
+
+    it('extracts couponCode OLHACUPOM (not "HANDLER" leaking from inline <script>)', () => {
+      const result = parser.extractCouponInfo(productCupomHandlerHtml);
+      expect(result).not.toBeNull();
+      expect(result!.couponCode).toBe('OLHACUPOM');
+    });
+
+    it('couponCode never contains "HANDLER"', () => {
+      const result = parser.extractCouponInfo(productCupomHandlerHtml);
+      expect(result?.couponCode).not.toBe('HANDLER');
     });
   });
 

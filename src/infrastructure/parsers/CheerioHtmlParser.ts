@@ -74,6 +74,11 @@ export class CheerioHtmlParser implements HtmlParser {
   extractCouponInfo(html: string): CouponInfo | null {
     const $ = cheerio.load(html);
 
+    // Strip <script>/<style> from the local DOM before any text() extraction so
+    // inline JS comments like "Initialize the coupon handler module" do not leak
+    // into the coupon-code regex (false positive: coupon code "HANDLER").
+    $('script, style').remove();
+
     let couponHref: string | null = null;
 
     // Pattern 1: <a href="/promotion/psp/...">
@@ -753,8 +758,10 @@ export class CheerioHtmlParser implements HtmlParser {
     const withCupom = text.match(/com o cupom\s+([A-Z0-9]{6,20})/i);
     if (withCupom?.[1]) return withCupom[1].toUpperCase();
 
-    // Pattern: "cupom XXXX" (shorter variant)
-    const shortCupom = text.match(/cupom\s+([A-Z0-9]{6,20})/i);
+    // Pattern: "cupom XXXX" / "cupom: XXXX" (shorter variant; ":" optional).
+    // Restrict the gap to inline spaces/tabs (no newlines) so a distant "Aplicar"
+    // sibling does not get captured when text() spans multiple elements.
+    const shortCupom = text.match(/cupom[:\s][ \t]{0,3}([A-Z0-9]{6,20})/i);
     if (shortCupom?.[1]) return shortCupom[1].toUpperCase();
 
     // Pattern: "coupon XXXX" (English variant)
