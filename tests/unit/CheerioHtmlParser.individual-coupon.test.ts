@@ -24,19 +24,10 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       'utf-8',
     );
     // Pre-order fixture: contains informative promo (pre-venda) that should NOT be extracted
-    const preOrderPath = path.resolve(
-      __dirname,
-      '..',
-      '..',
-      '..',
-      '..',
-      '..',
-      'artifacts',
-      'amazon-coupons',
-      'pre-order-html',
-      'Invencível_homem-aranha _ Amazon.com.br.html',
+    preOrderHtml = fs.readFileSync(
+      path.join(fixturesDir, 'product-preorder-promo.html'),
+      'utf-8',
     );
-    preOrderHtml = fs.readFileSync(preOrderPath, 'utf-8');
   });
 
   beforeEach(() => {
