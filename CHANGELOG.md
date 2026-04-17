@@ -1,3 +1,10 @@
+## [1.11.2](https://github.com/itsmaneka/amazing-scraper/compare/v1.11.1...v1.11.2) (2026-04-17)
+
+
+### Bug Fixes
+
+* **parser:** strip <script>/<style> in PSP coupon path to avoid HANDLER false positive ([8ee35be](https://github.com/itsmaneka/amazing-scraper/commit/8ee35bebd1a1576d9d3a23e02fd4ee81d31ee20b))
+
 ## [1.11.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.11.0...v1.11.1) (2026-04-16)
 
 
