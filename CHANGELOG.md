@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.11.2...v1.12.0) (2026-04-17)
+
+
+### Features
+
+* **parser:** detect BXGY (buy-x-get-y) coupons ([bda94ee](https://github.com/itsmaneka/amazing-scraper/commit/bda94ee61c48a678157787c1da28d4e59fa75e5c))
+
 ## [1.11.2](https://github.com/itsmaneka/amazing-scraper/compare/v1.11.1...v1.11.2) (2026-04-17)
 
 
