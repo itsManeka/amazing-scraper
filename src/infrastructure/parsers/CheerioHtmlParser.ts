@@ -282,6 +282,16 @@ export class CheerioHtmlParser implements HtmlParser {
           }
         }
 
+        // Filter out informative promotions (e.g., pre-order guarantees) that lack coupon signals:
+        // - couponCode must be extracted (signal 1)
+        // - discountText must be present (signal 2)
+        // - promoMessageCXCW element must exist (signal 3)
+        // If none of these signals are present, it's not a real coupon.
+        const hasPromoMessage = promoMessageEl.length > 0;
+        if (!couponCode && !discountText && !hasPromoMessage) {
+          return;
+        }
+
         result = {
           promotionId,
           couponCode,

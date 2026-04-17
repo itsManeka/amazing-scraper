@@ -7,6 +7,7 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
   let productWithIndividualCouponHtml: string;
   let productPageWithCouponHtml: string;
   let newProductHtml: string;
+  let preOrderHtml: string;
 
   beforeAll(() => {
     const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -22,6 +23,20 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       path.join(fixturesDir, 'new-product.html'),
       'utf-8',
     );
+    // Pre-order fixture: contains informative promo (pre-venda) that should NOT be extracted
+    const preOrderPath = path.resolve(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      '..',
+      '..',
+      'artifacts',
+      'amazon-coupons',
+      'pre-order-html',
+      'Invencível_homem-aranha _ Amazon.com.br.html',
+    );
+    preOrderHtml = fs.readFileSync(preOrderPath, 'utf-8');
   });
 
   beforeEach(() => {
@@ -255,6 +270,28 @@ describe('CheerioHtmlParser — extractIndividualCouponInfo', () => {
       );
       expect(page.couponInfo).not.toBeNull();
       expect(page.individualCouponInfo ?? null).toBeNull();
+    });
+  });
+
+  describe('pre-order false positive fix (fixture: Invencível_homem-aranha)', () => {
+    it('returns null for extractCouponInfo on pre-order HTML', () => {
+      const result = parser.extractCouponInfo(preOrderHtml);
+      expect(result).toBeNull();
+    });
+
+    it('skips informative pre-order promo (A15UPZCIWH41W4) and returns real coupon (ATVO4IBO0PTIE)', () => {
+      // The fixture contains two elements:
+      // 1. Informative promo A15UPZCIWH41W4: "Promoção Pré-venda com Preço Mais Baixo Garantido"
+      //    without couponCode, discountText, or promoMessageCXCW. This should be filtered out.
+      // 2. Real coupon ATVO4IBO0PTIE with couponCode VEMNOAPP and discountText R$20.
+      //    This should be returned.
+      const result = parser.extractIndividualCouponInfo(preOrderHtml);
+      expect(result).not.toBeNull();
+      expect(result!.promotionId).toBe('ATVO4IBO0PTIE');
+      expect(result!.couponCode).toBe('VEMNOAPP');
+      expect(result!.discountText).toMatch(/R\$\s*20/);
+      // The informative promo (A15UPZCIWH41W4) should NOT be returned
+      expect(result!.promotionId).not.toBe('A15UPZCIWH41W4');
     });
   });
 });
