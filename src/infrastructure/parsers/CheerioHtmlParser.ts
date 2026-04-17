@@ -124,9 +124,11 @@ export class CheerioHtmlParser implements HtmlParser {
     // Pattern 4: BXGY (buy-x-get-y) link with /fmc/xb-store/buy-x-get-y
     // Restricted to #promoPriceBlockMessage_feature_div or [data-csa-c-owner="PromotionsDiscovery"]
     // so we do not pick up unrelated BXGY links elsewhere on the page.
+    // Accepts both absolute URLs (https://www.amazon.com.br/fmc/xb-store/buy-x-get-y?...)
+    // and relative paths (/fmc/xb-store/buy-x-get-y?...) from raw scraper HTML.
     let bxgyInfo: CouponInfo | null = null;
     if (!couponHref) {
-      const bxgyDomainPattern = /^https?:\/\/(www\.)?amazon\.com\.br\/fmc\/xb-store\/buy-x-get-y\?/;
+      const bxgyDomainPattern = /^(https?:\/\/(www\.)?amazon\.com\.br)?\/fmc\/xb-store\/buy-x-get-y\?/;
       const bxgySelector =
         '#promoPriceBlockMessage_feature_div a[href*="/fmc/xb-store/buy-x-get-y"], ' +
         '[data-csa-c-owner="PromotionsDiscovery"] a[href*="/fmc/xb-store/buy-x-get-y"]';

@@ -9,6 +9,8 @@ describe('CheerioHtmlParser — BXGY (buy-x-get-y) coupons', () => {
   let productPageWithCouponHtml: string;
   let productWithIndividualCouponHtml: string;
 
+  let bxgyProductPageRawHtml: string;
+
   beforeAll(() => {
     const fixturesDir = path.join(__dirname, '..', 'fixtures');
     bxgyProductPageHtml = fs.readFileSync(
@@ -25,6 +27,10 @@ describe('CheerioHtmlParser — BXGY (buy-x-get-y) coupons', () => {
     );
     productWithIndividualCouponHtml = fs.readFileSync(
       path.join(fixturesDir, 'product-with-individual-coupon.html'),
+      'utf-8',
+    );
+    bxgyProductPageRawHtml = fs.readFileSync(
+      path.join(fixturesDir, 'coupons/bxgy/product-page-raw.html'),
       'utf-8',
     );
   });
@@ -138,6 +144,32 @@ describe('CheerioHtmlParser — BXGY (buy-x-get-y) coupons', () => {
       expect(token).not.toBeNull();
       expect(token).not.toBe('');
       expect(typeof token).toBe('string');
+    });
+  });
+
+  describe('[T3.6] Robustness — BXGY with relative href (raw scraper HTML)', () => {
+    it('extractCouponInfo parses raw HTML with relative href /fmc/xb-store/buy-x-get-y?...', () => {
+      const result = parser.extractCouponInfo(bxgyProductPageRawHtml);
+      expect(result).not.toBeNull();
+      expect(result!.promotionId).toBe('A3TBV928F3J7NX');
+      expect(result!.redirectAsin).toBe('B01MZCQ0YX');
+      expect(result!.redirectMerchantId).toBe('A2EB9PYM83FCP9');
+    });
+
+    it('extractCouponInfo returns CouponInfo with all expected fields for raw HTML', () => {
+      const result = parser.extractCouponInfo(bxgyProductPageRawHtml);
+      expect(result).toEqual({
+        promotionId: 'A3TBV928F3J7NX',
+        redirectAsin: 'B01MZCQ0YX',
+        redirectMerchantId: 'A2EB9PYM83FCP9',
+        promotionMerchantId: 'A2EB9PYM83FCP9',
+        couponCode: null,
+      });
+    });
+
+    it('extractIndividualCouponInfo returns null when raw HTML has BXGY detected', () => {
+      const result = parser.extractIndividualCouponInfo(bxgyProductPageRawHtml);
+      expect(result).toBeNull();
     });
   });
 });
