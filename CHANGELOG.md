@@ -1,3 +1,10 @@
+## [1.12.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.12.0...v1.12.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* **parser:** accept relative href in BXGY pattern 4 ([92aba0c](https://github.com/itsmaneka/amazing-scraper/commit/92aba0c6a0283cda93850a93c5527748ccfda048))
+
 # [1.12.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.11.2...v1.12.0) (2026-04-17)
 
 
