@@ -66,10 +66,12 @@ const PRODUCT_GROUP_LABELS: Record<string, string> = {
 export class CheerioHtmlParser implements HtmlParser {
   /**
    * Extracts coupon promotion info from a product page.
-   * Tries 3 patterns in order:
+   * Tries 5 patterns in order:
    * 1. Anchor tags with `/promotion/psp/` in href
    * 2. Elements with id containing "coupon" that wrap an anchor
    * 3. Anchor tags with text containing "cupom", "coupon", or "Clique para aplicar"
+   * 4. BXGY (buy-x-get-y) link with `/fmc/xb-store/buy-x-get-y` and promotionId parameter
+   * 5. Fallback: `/promotion/psp/` serialized in JSON + amzn1.promotion ID in PromotionsDiscovery
    */
   extractCouponInfo(html: string): CouponInfo | null {
     const $ = cheerio.load(html);
@@ -117,6 +119,75 @@ export class CheerioHtmlParser implements HtmlParser {
           }
         }
       });
+    }
+
+    // Pattern 4: BXGY (buy-x-get-y) link with /fmc/xb-store/buy-x-get-y
+    // Restricted to #promoPriceBlockMessage_feature_div or [data-csa-c-owner="PromotionsDiscovery"]
+    // so we do not pick up unrelated BXGY links elsewhere on the page.
+    let bxgyInfo: CouponInfo | null = null;
+    if (!couponHref) {
+      const bxgyDomainPattern = /^https?:\/\/(www\.)?amazon\.com\.br\/fmc\/xb-store\/buy-x-get-y\?/;
+      const bxgySelector =
+        '#promoPriceBlockMessage_feature_div a[href*="/fmc/xb-store/buy-x-get-y"], ' +
+        '[data-csa-c-owner="PromotionsDiscovery"] a[href*="/fmc/xb-store/buy-x-get-y"]';
+      $(bxgySelector).each((_, el) => {
+        if (bxgyInfo) return;
+        const href = $(el).attr('href') ?? '';
+        if (!bxgyDomainPattern.test(href)) return;
+
+        const url = new URL(href.startsWith('http') ? href : `https://www.amazon.com.br${href}`);
+        const promotionId = url.searchParams.get('promotionId');
+        if (!promotionId || !/^[A-Z0-9]+$/.test(promotionId)) return;
+
+        const redirectAsin = url.searchParams.get('redirectAsin') ?? '';
+        const redirectMerchantId = url.searchParams.get('redirectMerchantId') ?? '';
+        bxgyInfo = {
+          promotionId,
+          redirectAsin,
+          redirectMerchantId,
+          promotionMerchantId: redirectMerchantId,
+          couponCode: null,
+        };
+      });
+      if (bxgyInfo) {
+        return bxgyInfo;
+      }
+    }
+
+    // Pattern 5: Fallback for BXGY — /promotion/psp/ serialized in JSON within PromotionsDiscovery
+    // + amzn1.promotion ID in data-csa-c-item-id
+    if (!couponHref) {
+      let fallbackInfo: CouponInfo | null = null;
+      $('[data-csa-c-owner="PromotionsDiscovery"]').each((_, el) => {
+        if (fallbackInfo) return;
+
+        const itemId = $(el).attr('data-csa-c-item-id') ?? '';
+        const promotionMatch = itemId.match(/amzn1\.promotion\.([A-Z0-9]+)/);
+        if (!promotionMatch) return;
+
+        const promotionId = promotionMatch[1];
+
+        // Look for /promotion/psp/{ID} anywhere in the element HTML
+        const elementHtml = $(el).html() ?? '';
+        if (elementHtml.includes(`/promotion/psp/${promotionId}`)) {
+          // Extract redirectAsin from ASIN in data-csa-c-item-id (format: amzn1.asin.{ASIN}:...)
+          const asinMatch = itemId.match(/amzn1\.asin\.([A-Z0-9]+)/);
+          const redirectAsin = asinMatch?.[1] ?? '';
+          // redirectMerchantId from buybox or fallback to empty (will be filled later if needed)
+          const redirectMerchantId = '';
+
+          fallbackInfo = {
+            promotionId,
+            redirectAsin,
+            redirectMerchantId,
+            promotionMerchantId: redirectMerchantId,
+            couponCode: null,
+          };
+        }
+      });
+      if (fallbackInfo) {
+        return fallbackInfo;
+      }
     }
 
     if (!couponHref) {
