@@ -904,7 +904,7 @@ export class CheerioHtmlParser implements HtmlParser {
 
   /**
    * Extracts a coupon code from the product page text.
-   * Looks for patterns like "com o cupom FJOVKLWWIZXM" or "cupom FJOVKLWWIZXM"
+   * Looks for patterns like "com o cupom FJOVKLWWIZXM", "cupom FJOVKLWWIZXM", or "Insira o código GEEK15"
    * in coupon-related elements and their surrounding context.
    */
   private extractCouponCode($: cheerio.CheerioAPI): string | null {
@@ -936,9 +936,15 @@ export class CheerioHtmlParser implements HtmlParser {
       }
     }
 
-    // Fallback: scan full page text (title area, promo blocks)
-    const bodyText = $('body').text();
-    return this.matchCouponCode(bodyText);
+    // Fallback: scan restricted containers (exclude ads/feedback widgets outside coupon area)
+    const fallbackText = ['#centerCol', '#apex_desktop', '#promoPriceBlockMessage_feature_div']
+      .map((sel) => $(sel).text())
+      .join(' ');
+    if (fallbackText.trim().length > 0) {
+      return this.matchCouponCode(fallbackText);
+    }
+
+    return null;
   }
 
   /**
@@ -959,6 +965,10 @@ export class CheerioHtmlParser implements HtmlParser {
     // Pattern: "coupon XXXX" (English variant)
     const coupon = text.match(/coupon\s+([A-Z0-9]{6,20})/i);
     if (coupon?.[1]) return coupon[1].toUpperCase();
+
+    // Pattern: "Insira o codigo XXXX" (PSP coupon block variant)
+    const insiraOCodigo = text.match(/Insira\s+o\s+c[óo]digo\s+([A-Z0-9]{4,20})/i);
+    if (insiraOCodigo?.[1]) return insiraOCodigo[1].toUpperCase();
 
     return null;
   }

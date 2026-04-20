@@ -12,6 +12,7 @@
 
 ### Fixed
 - Applicable coupons whose participating-products link points to `/promotion/psp/<id>` were misclassified as PSP coupons; detection now gives precedence to the "Aplicar cupom de X%" container over the PSP href pattern.
+- Coupon codes such as GEEK15 and OBRA15 were incorrectly extracted as "FEEDBACK" when ad/feedback widgets appeared before the coupon block in the page DOM; extractor now matches the "Insira o código X" pattern directly in the coupon container and restricts the fallback scan to `#centerCol`, `#apex_desktop`, and `#promoPriceBlockMessage_feature_div`.
 
 ## [1.12.2](https://github.com/itsmaneka/amazing-scraper/compare/v1.12.1...v1.12.2) (2026-04-17)
 
