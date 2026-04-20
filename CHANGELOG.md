@@ -1,3 +1,10 @@
+## [1.13.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.13.0...v1.13.1) (2026-04-20)
+
+
+### Bug Fixes
+
+* **parser:** extract coupon code via "Insira o código" regex ([1be0d2d](https://github.com/itsmaneka/amazing-scraper/commit/1be0d2deb93d6fc6cacd085e283889ad5d1cfecd)), closes [#centerCol](https://github.com/itsmaneka/amazing-scraper/issues/centerCol) [#apex_desktop](https://github.com/itsmaneka/amazing-scraper/issues/apex_desktop) [#promoPriceBlockMessage_feature_div](https://github.com/itsmaneka/amazing-scraper/issues/promoPriceBlockMessage_feature_div)
+
 # [1.13.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.12.2...v1.13.0) (2026-04-20)
 
 
