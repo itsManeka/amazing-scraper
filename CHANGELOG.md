@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.12.2...v1.13.0) (2026-04-20)
+
+
+### Features
+
+* **parser:** detect applicable coupons (Aplicar cupom de X%) ([0d3e19a](https://github.com/itsmaneka/amazing-scraper/commit/0d3e19a528b5b4d6348e73cfeb4f7692856bf1cb))
+
 ## [Unreleased]
 
 ### Added
