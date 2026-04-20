@@ -1,3 +1,11 @@
+## [Unreleased]
+
+### Added
+- Detect "applicable" coupons (generic "Aplicar cupom de X%" label without code) in product pages; expose via new optional fields on `IndividualCouponInfo`: `isApplicable`, `participatingProductsUrl`, `discountPercent`.
+
+### Fixed
+- Applicable coupons whose participating-products link points to `/promotion/psp/<id>` were misclassified as PSP coupons; detection now gives precedence to the "Aplicar cupom de X%" container over the PSP href pattern.
+
 ## [1.12.2](https://github.com/itsmaneka/amazing-scraper/compare/v1.12.1...v1.12.2) (2026-04-17)
 
 

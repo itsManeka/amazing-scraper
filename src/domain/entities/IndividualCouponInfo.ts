@@ -44,4 +44,23 @@ export interface IndividualCouponInfo {
   termsUrl: string | null;
   /** Discriminant to distinguish from `CouponInfo`. Always `true`. */
   isIndividual: true;
+  /**
+   * Indicates whether this coupon is an "applicable" coupon (pattern: "Aplicar cupom de X%").
+   * Applicable coupons are generic promotional discounts without a dedicated coupon code
+   * in the product page (the code, if any, is on the promotion's PSP page — extracted by F03 if needed).
+   * `true` only for applicable pattern; `undefined` or absent in classic "Insira o código" flow.
+   */
+  isApplicable?: boolean;
+  /**
+   * URL to the participating products page for applicable coupons (link labeled "Ver Itens Participantes" in PT-BR).
+   * `null` when the link is not present (e.g., some applicable coupons like coupon-03 have no participating products list).
+   * `undefined` or absent in classic "Insira o código" flow.
+   */
+  participatingProductsUrl?: string | null;
+  /**
+   * Discount percentage extracted from "Aplicar cupom de X%" text for applicable coupons (e.g., 10 from "Aplicar cupom de 10%").
+   * Integer from 1-99. `null` when the regex fails to extract (defensive; not expected in known fixtures).
+   * `undefined` or absent in classic "Insira o código" flow.
+   */
+  discountPercent?: number | null;
 }

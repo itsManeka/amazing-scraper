@@ -83,10 +83,39 @@ export class CheerioHtmlParser implements HtmlParser {
 
     let couponHref: string | null = null;
 
-    // Pattern 1: <a href="/promotion/psp/...">
+    // CRITICAL PRECEDENCE CHECK (applies before Patterns 1-4):
+    // If there's a /promotion/psp/ link INSIDE a PromotionsDiscovery container with
+    // "Aplicar cupom de X%", it's an applicable coupon, not a PSP.
+    // Return null here to let extractIndividualCouponInfo handle it with isApplicable: true.
+    const applicablePromotionIds = new Set<string>();
+    $('[data-csa-c-owner="PromotionsDiscovery"]').each((_, el) => {
+      const itemId = $(el).attr('data-csa-c-item-id') ?? '';
+      const promotionMatch = itemId.match(/amzn1\.promotion\.([A-Z0-9]+)/);
+      if (promotionMatch) {
+        const promotionId = promotionMatch[1];
+        const elementHtml = $(el).html() ?? '';
+        if (elementHtml.includes(`/promotion/psp/${promotionId}`)) {
+          const containerText = $(el).clone().find('style, script').remove().end().text();
+          const normalizedText = this.normalizeText(containerText);
+          const isApplicablePattern = /Aplicar\s+cupom\s+de\s+\d{1,2}%/i.test(normalizedText);
+          if (isApplicablePattern) {
+            applicablePromotionIds.add(promotionId);
+          }
+        }
+      }
+    });
+
+    // Pattern 1: <a href="/promotion/psp/..."> — but skip if it's an applicable coupon
     $('a[href*="/promotion/psp/"]').each((_, el) => {
       if (!couponHref) {
-        couponHref = $(el).attr('href') ?? null;
+        const href = $(el).attr('href') ?? null;
+        if (href) {
+          const promotionMatch = href.match(/\/promotion\/psp\/([A-Z0-9]+)/);
+          const promotionId = promotionMatch?.[1];
+          if (promotionId && !applicablePromotionIds.has(promotionId)) {
+            couponHref = href;
+          }
+        }
       }
     });
 
@@ -96,7 +125,11 @@ export class CheerioHtmlParser implements HtmlParser {
         if (!couponHref) {
           const href = $(el).attr('href') ?? '';
           if (href.includes('/promotion/psp/')) {
-            couponHref = href;
+            const promotionMatch = href.match(/\/promotion\/psp\/([A-Z0-9]+)/);
+            const promotionId = promotionMatch?.[1];
+            if (promotionId && !applicablePromotionIds.has(promotionId)) {
+              couponHref = href;
+            }
           }
         }
       });
@@ -114,7 +147,11 @@ export class CheerioHtmlParser implements HtmlParser {
           ) {
             const href = $(el).attr('href') ?? '';
             if (href.includes('/promotion/psp/')) {
-              couponHref = href;
+              const promotionMatch = href.match(/\/promotion\/psp\/([A-Z0-9]+)/);
+              const promotionId = promotionMatch?.[1];
+              if (promotionId && !applicablePromotionIds.has(promotionId)) {
+                couponHref = href;
+              }
             }
           }
         }
@@ -158,6 +195,8 @@ export class CheerioHtmlParser implements HtmlParser {
 
     // Pattern 5: Fallback for BXGY — /promotion/psp/ serialized in JSON within PromotionsDiscovery
     // + amzn1.promotion ID in data-csa-c-item-id
+    // NOTE: Applicable coupons are already filtered out by applicablePromotionIds above,
+    // so this fallback will only match true PSP promotions.
     if (!couponHref) {
       let fallbackInfo: CouponInfo | null = null;
       $('[data-csa-c-owner="PromotionsDiscovery"]').each((_, el) => {
@@ -168,6 +207,9 @@ export class CheerioHtmlParser implements HtmlParser {
         if (!promotionMatch) return;
 
         const promotionId = promotionMatch[1];
+
+        // Skip if this is an applicable coupon (filtered above)
+        if (applicablePromotionIds.has(promotionId)) return;
 
         // Look for /promotion/psp/{ID} anywhere in the element HTML
         const elementHtml = $(el).html() ?? '';
@@ -214,6 +256,13 @@ export class CheerioHtmlParser implements HtmlParser {
    * `<span class="a-declarative">` wrapper (the `href` of the "Termos"
    * link points to the product page, not the popover endpoint).
    *
+   * Detects two patterns within the PromotionsDiscovery container:
+   * 1. **Classic flow:** "Insira o código X" / "cupom: X" — standard inline coupons with
+   *    a specific coupon code for the product.
+   * 2. **Applicable flow:** "Aplicar cupom de X%" — generic promotional discounts without
+   *    a product-specific code (flagged via `isApplicable: true`). May include a link to
+   *    participating products ("Ver Itens Participantes") exposed via `participatingProductsUrl`.
+   *
    * If the page already contains a PSP-style coupon
    * (`/promotion/psp/`), this method returns `null` so PSP coupons take
    * precedence.
@@ -250,9 +299,15 @@ export class CheerioHtmlParser implements HtmlParser {
         // Clone the element and remove <style>/<script> before calling .text() to prevent
         // CSS rules injected by Amazon from leaking into the description text.
         const promoMessageEl = $(el).find('[id^="promoMessageCXCW"]').first();
-        const promoMessageText = promoMessageEl.length > 0
-          ? promoMessageEl.clone().find('style, script').remove().end().text()
-          : $(el).clone().find('style, script').remove().end().text();
+        const couponTextEl = $(el).find('[id^="couponText"]').first(); // Applicable pattern fallback
+        let promoMessageText: string;
+        if (promoMessageEl.length > 0) {
+          promoMessageText = promoMessageEl.clone().find('style, script').remove().end().text();
+        } else if (couponTextEl.length > 0) {
+          promoMessageText = couponTextEl.clone().find('style, script').remove().end().text();
+        } else {
+          promoMessageText = $(el).clone().find('style, script').remove().end().text();
+        }
         const rawMessageText = this.normalizeText(promoMessageText);
         const codeMatch =
           rawMessageText.match(/Insira\s+o\s+c[óo]digo\s+([A-Z0-9]{4,20})/i) ??
@@ -260,8 +315,10 @@ export class CheerioHtmlParser implements HtmlParser {
         const couponCode = codeMatch?.[1]?.toUpperCase() ?? null;
 
         // Remove leading "off." prefix and trailing "Termos" from description
+        // Also remove "Ver Itens Participantes" and trailing pipe for applicable coupons
         const cleanedMessage = rawMessageText
           .replace(/^\s*off\.\s*/i, '')
+          .replace(/\s+\|\s*Ver\s+Itens\s+Participantes\s*/i, '')
           .replace(/\s*Termos\s*$/, '')
           .trim();
         const description = cleanedMessage.length > 0 ? cleanedMessage : null;
@@ -282,6 +339,56 @@ export class CheerioHtmlParser implements HtmlParser {
           }
         }
 
+        // ===== CLASSIC FLOW: "Insira o código X" / "cupom: X" =====
+        // Try classic individual coupon pattern first.
+        if (couponCode) {
+          result = {
+            promotionId,
+            couponCode,
+            discountText,
+            description,
+            termsUrl,
+            isIndividual: true,
+          };
+          return;
+        }
+
+        // ===== APPLICABLE FLOW: "Aplicar cupom de X%" =====
+        // If classic pattern didn't match, try the applicable pattern.
+        const applicableMatch = rawMessageText.match(/Aplicar\s+cupom\s+de\s+(\d{1,2})%/i);
+        if (applicableMatch) {
+          const discountPercent = Number(applicableMatch[1]);
+
+          // Extract participatingProductsUrl: href of "Ver Itens Participantes" link
+          let participatingProductsUrl: string | null = null;
+          const participatingLink = $(el)
+            .find('a')
+            .filter((_, linkEl) => {
+              const linkText = this.normalizeText($(linkEl).text());
+              return /Ver\s+Itens\s+Participantes/i.test(linkText);
+            })
+            .first();
+          if (participatingLink.length > 0) {
+            const href = participatingLink.attr('href');
+            if (href && href.length > 0) {
+              participatingProductsUrl = href;
+            }
+          }
+
+          result = {
+            promotionId,
+            couponCode: null,
+            discountText: null,
+            description: cleanedMessage.length > 0 ? cleanedMessage : null,
+            termsUrl,
+            isIndividual: true,
+            isApplicable: true,
+            participatingProductsUrl,
+            discountPercent,
+          };
+          return;
+        }
+
         // Filter out informative promotions (e.g., pre-order guarantees) that lack coupon signals:
         // - couponCode must be extracted (signal 1)
         // - discountText must be present (signal 2)
@@ -292,6 +399,8 @@ export class CheerioHtmlParser implements HtmlParser {
           return;
         }
 
+        // Fallback: if the classic flow detected signals but no coupon code,
+        // return a partial result (should rarely happen with current fixtures).
         result = {
           promotionId,
           couponCode,
