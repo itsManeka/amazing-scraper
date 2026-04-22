@@ -19,17 +19,6 @@
 
 * **parser:** detect applicable coupons (Aplicar cupom de X%) ([0d3e19a](https://github.com/itsmaneka/amazing-scraper/commit/0d3e19a528b5b4d6348e73cfeb4f7692856bf1cb))
 
-## [Unreleased]
-
-### Added
-- Detect "applicable" coupons (generic "Aplicar cupom de X%" label without code) in product pages; expose via new optional fields on `IndividualCouponInfo`: `isApplicable`, `participatingProductsUrl`, `discountPercent`.
-- New method `scraper.extractApplicableCouponProducts(couponInfo, sourceAsin)` to retrieve participating ASINs and expiration date for applicable coupons. Coupon-03 (no product list) returns only `sourceAsin`; coupon-04 (with product list) paginates the coupon page and returns all participating ASINs. Exported type: `ApplicableCouponResult`.
-- New `ScraperError` code `not_applicable_coupon` thrown when `extractApplicableCouponProducts` is called with a coupon that has `isApplicable !== true`.
-
-### Fixed
-- Applicable coupons whose participating-products link points to `/promotion/psp/<id>` were misclassified as PSP coupons; detection now gives precedence to the "Aplicar cupom de X%" container over the PSP href pattern.
-- Coupon codes such as GEEK15 and OBRA15 were incorrectly extracted as "FEEDBACK" when ad/feedback widgets appeared before the coupon block in the page DOM; extractor now matches the "Insira o código X" pattern directly in the coupon container and restricts the fallback scan to `#centerCol`, `#apex_desktop`, and `#promoPriceBlockMessage_feature_div`.
-
 ## [1.12.2](https://github.com/itsmaneka/amazing-scraper/compare/v1.12.1...v1.12.2) (2026-04-17)
 
 
