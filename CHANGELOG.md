@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.14.1...v1.15.0) (2026-04-22)
+
+
+### Features
+
+* **parser:** detect all coupons on a product page ([1bedb32](https://github.com/itsmaneka/amazing-scraper/commit/1bedb32c980abafc2d1c2a9482ea072a461d4e0a))
+
 ## [1.14.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.14.0...v1.14.1) (2026-04-22)
 
 
