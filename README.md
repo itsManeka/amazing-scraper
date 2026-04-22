@@ -136,22 +136,50 @@ const next = await scraper.fetchPreSales({ stopAtAsin: lastSeen });
 console.log(`${next.asins.length} new pre-sale ASINs found`);
 ```
 
-### `IndividualCouponInfo`
+### `scraper.extractApplicableCouponProducts(couponInfo: IndividualCouponInfo, sourceAsin: string)`
 
-Information extracted from an inline "individual" coupon shown directly on the product page (not a coupon with a dedicated `/promotion/psp/` page and participating product list). Individual coupons are never linked to any product and must not be used for price calculation.
+Extracts the list of participating ASINs for an "applicable" coupon — a generic percentage-off coupon that applies automatically at checkout (no code required), detected when `IndividualCouponInfo.isApplicable` is `true`.
+
+Two patterns are supported:
+
+- **coupon-03** (`participatingProductsUrl` is `null`): no additional HTTP request. Returns an array containing only `sourceAsin`.
+- **coupon-04** (`participatingProductsUrl` is set): fetches the coupon page, extracts the CSRF token, paginates through all participating ASINs, and returns the full list.
+
+In both cases, fetches the coupon terms (`termsUrl`) to extract the expiration date. If terms are unavailable, `expiresAt` is `null` and the operation continues normally.
+
+Returns `ApplicableCouponResult`:
 
 ```typescript
-interface IndividualCouponInfo {
-  promotionId: string;          // Extracted from data-csa-c-item-id
-  couponCode: string | null;    // e.g. "VEMNOAPP"
-  discountText: string | null;  // Badge value: "R$20", "20%", etc. (v1.11.0+)
-  description: string | null;   // Cleaned message text without "off." prefix
-  termsUrl: string | null;      // URL to fetch coupon terms/conditions
-  isIndividual: true;           // Discriminant
+interface ApplicableCouponResult {
+  asins: string[];          // Participating ASINs; always includes sourceAsin as fallback
+  expiresAt: string | null; // e.g. "30/04/2026"; null when terms are unavailable
 }
 ```
 
-**Breaking change in v1.11.0:** Added `discountText` field to capture the monetary/percentage badge value from the HTML structure. This field is `null` when the badge element is not found.
+Built-in protections (same as `extractCouponProducts`):
+- SSRF guard: `participatingProductsUrl` must be a valid `https://www.amazon.com.br` URL
+- Pagination loop guard, ASIN deduplication, and configurable `maxProducts`/`maxPages` limits
+- Degrade paths: network failures during product listing fall back to `[sourceAsin]`
+
+### `IndividualCouponInfo`
+
+Information extracted from an inline coupon shown directly on the product page. Individual coupons have no dedicated `/promotion/psp/` page when `isApplicable` is `false`; when `isApplicable` is `true`, they may have a participating products page.
+
+```typescript
+interface IndividualCouponInfo {
+  promotionId: string;                        // Extracted from data-csa-c-item-id
+  couponCode: string | null;                  // e.g. "VEMNOAPP"; null for applicable coupons
+  discountText: string | null;                // Badge value: "R$20", "20%", etc. (v1.11.0+)
+  description: string | null;                 // Cleaned message text without "off." prefix
+  termsUrl: string | null;                    // URL to fetch coupon terms/conditions
+  isIndividual: true;                         // Discriminant
+  isApplicable?: boolean;                     // true for automatic checkout coupons (no code)
+  participatingProductsUrl?: string | null;   // Coupon page URL (coupon-04); null when absent (coupon-03)
+  discountPercent?: number | null;            // Numeric discount value, e.g. 10 for "10% off"
+}
+```
+
+**Breaking change in v1.11.0:** Added `discountText` field. This field is `null` when the badge element is not found.
 
 ### `CouponMetadata`
 
@@ -190,6 +218,7 @@ The scraper throws `ScraperError` with typed codes:
 | `blocked` | HTTP 403 (after retry), 503, or CAPTCHA detected |
 | `csrf_not_found` | Anti-CSRF token missing from coupon page HTML |
 | `session_expired` | 403 persists during pagination after session refresh |
+| `not_applicable_coupon` | `extractApplicableCouponProducts` called with `isApplicable !== true` |
 
 ```typescript
 import { ScraperError } from 'amazing-scraper';
@@ -225,11 +254,12 @@ const scraper = createScraper({ logger: myLogger });
 ```
 src/
   domain/
-    entities/          Product, CouponInfo, CouponResult, CouponMetadata, FetchPreSalesResult
+    entities/          Product, CouponInfo, CouponResult, CouponMetadata, IndividualCouponInfo, ApplicableCouponResult
     errors/            ScraperError
   application/
     ports/             HttpClient, HtmlParser, Logger
-    use-cases/         FetchProduct, ExtractCouponProducts, FetchPreSales
+    use-cases/         FetchProduct, ExtractCouponProducts, FetchPreSales, FetchIndividualCouponTerms,
+                       ExtractApplicableCouponProducts
   infrastructure/
     http/              AxiosHttpClient (axios + tough-cookie)
     parsers/           CheerioHtmlParser (cheerio)

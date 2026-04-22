@@ -447,6 +447,56 @@ export class CheerioHtmlParser implements HtmlParser {
   }
 
   /**
+   * Extracts the expiration date from individual coupon terms text.
+   * Receives already-parsed terms text (not HTML) and extracts the date
+   * using lazy regex pattern "ate DD de MMMM de YYYY" or "ate DD de MMMM de YYYY as HH:MM".
+   * Returns the date in format "dd/MM/yyyy" or null when the pattern is not found.
+   * Uses lazy quantifier (.+?) to prevent ReDoS attacks on long input strings.
+   * Normalises accented "até"/"às" to "ate"/"as" before regex to handle Unicode correctly.
+   *
+   * Input validation: Rejects strings longer than 10,000 characters to mitigate
+   * against pathological ReDoS scenarios with many "ate " fragments.
+   */
+  extractIndividualCouponExpiration(termsText: string): string | null {
+    if (!termsText || termsText.length === 0) {
+      return null;
+    }
+
+    // Guard against pathologically long inputs that could cause performance issues
+    if (termsText.length > 10_000) {
+      return null;
+    }
+
+    // Normalize input: replace non-breaking spaces with regular spaces and trim
+    const normalized = this.normalizeText(termsText);
+
+    // Replace accented variants for regex matching:
+    // "até" → "ate", "às" → "as" to standardise for regex
+    // This handles Unicode variants like "Até", "ATÉ", "Às", "AS", etc.
+    let normalizedForRegex = normalized.replace(/até/gi, 'ate');
+    normalizedForRegex = normalizedForRegex.replace(/às/gi, 'as');
+
+    // Extract date using anchored regex to match the expected PT-BR date format.
+    // Pattern: "ate DD de MMMM de YYYY [as HH:MM]"
+    // Anchors on digits + month names to avoid capturing intermediate text between multiple "ate" occurrences.
+    // If multiple "ate" patterns exist, extracts the first valid match that produces a non-null date.
+    const ateMatches = normalizedForRegex.matchAll(
+      /ate\s+(\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4}(?:\s+as\s+\d{1,2}:\d{2})?)/gi,
+    );
+
+    for (const match of ateMatches) {
+      if (!match[1]) continue;
+      const dateFragment = match[1].trim();
+      const result = this.formatPtBrDate(dateFragment);
+      if (result !== null) {
+        return result;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Fallback extractor for the raw popover response: iterates over every
    * inline `<script>` located by Cheerio, applies a non-greedy regex to
    * isolate the first `tncComponent.renderTnC({...})` invocation, and

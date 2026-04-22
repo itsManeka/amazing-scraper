@@ -74,6 +74,7 @@ function createMocks() {
     extractCouponInfo: jest.fn(),
     extractIndividualCouponInfo: jest.fn(),
     extractIndividualCouponTerms: jest.fn(),
+    extractIndividualCouponExpiration: jest.fn().mockReturnValue(null),
     extractCsrfToken: jest.fn(),
     extractCouponMetadata: jest.fn().mockReturnValue(defaultMetadata),
     extractProductInfo: jest.fn(),

@@ -16,6 +16,8 @@
 
 ### Added
 - Detect "applicable" coupons (generic "Aplicar cupom de X%" label without code) in product pages; expose via new optional fields on `IndividualCouponInfo`: `isApplicable`, `participatingProductsUrl`, `discountPercent`.
+- New method `scraper.extractApplicableCouponProducts(couponInfo, sourceAsin)` to retrieve participating ASINs and expiration date for applicable coupons. Coupon-03 (no product list) returns only `sourceAsin`; coupon-04 (with product list) paginates the coupon page and returns all participating ASINs. Exported type: `ApplicableCouponResult`.
+- New `ScraperError` code `not_applicable_coupon` thrown when `extractApplicableCouponProducts` is called with a coupon that has `isApplicable !== true`.
 
 ### Fixed
 - Applicable coupons whose participating-products link points to `/promotion/psp/<id>` were misclassified as PSP coupons; detection now gives precedence to the "Aplicar cupom de X%" container over the PSP href pattern.

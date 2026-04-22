@@ -55,6 +55,9 @@ export interface IndividualCouponInfo {
    * URL to the participating products page for applicable coupons (link labeled "Ver Itens Participantes" in PT-BR).
    * `null` when the link is not present (e.g., some applicable coupons like coupon-03 have no participating products list).
    * `undefined` or absent in classic "Insira o código" flow.
+   *
+   * @untrusted Value extracted from public HTML on the Amazon website. Always validate via SSRF guard
+   * (allow-list of hostname amazon.com.br, https-only) before performing any fetch operation.
    */
   participatingProductsUrl?: string | null;
   /**

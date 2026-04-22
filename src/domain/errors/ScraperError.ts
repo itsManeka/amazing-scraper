@@ -4,7 +4,8 @@ export type ScraperErrorCode =
   | 'session_expired'
   | 'no_coupon'
   | 'price_not_found'
-  | 'incomplete_data';
+  | 'incomplete_data'
+  | 'not_applicable_coupon';
 
 export interface ScraperErrorOptions {
   retryable?: boolean;

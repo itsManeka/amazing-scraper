@@ -33,6 +33,14 @@ export interface HtmlParser {
   extractIndividualCouponTerms(html: string): string | null;
 
   /**
+   * Extracts the expiration date from individual coupon terms text.
+   * Receives already-parsed terms text (not HTML) and extracts the date
+   * using regex pattern "ate DD de MMMM de YYYY" or "ate DD de MMMM de YYYY as HH:MM".
+   * Returns the date in format "dd/MM/yyyy" or null when the pattern is not found.
+   */
+  extractIndividualCouponExpiration(termsText: string): string | null;
+
+  /**
    * Extracts the anti-CSRF token from a coupon promotion page.
    * Returns `null` when no token is found.
    */

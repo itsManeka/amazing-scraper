@@ -34,13 +34,56 @@ discountPercent?: number | null
 ```
 Campos ausentes/`undefined` no fluxo clássico — extensão retrocompatível.
 
+## Extração de ASINs participantes — `ExtractApplicableCouponProducts`
+
+Use case em `src/application/use-cases/ExtractApplicableCouponProducts.ts`. Exposto via `createScraper()` como `scraper.extractApplicableCouponProducts(couponInfo, sourceAsin)`. Retorna `ApplicableCouponResult`:
+
+```ts
+interface ApplicableCouponResult {
+  asins: string[];          // sempre inclui sourceAsin como fallback mínimo
+  expiresAt: string | null; // formato "dd/MM/yyyy"; null se termsUrl falhar
+}
+```
+
+**Fluxo coupon-03** (`participatingProductsUrl === null`):
+1. Chama `FetchIndividualCouponTerms.execute(termsUrl)` → texto dos termos
+2. Chama `htmlParser.extractIndividualCouponExpiration(termsText)` → data
+3. Retorna `{ asins: [sourceAsin], expiresAt }` — zero requests adicionais de listagem
+
+**Fluxo coupon-04** (`participatingProductsUrl !== null`):
+1. SSRF guard: valida que a URL é `https://www.amazon.com.br` (rejeita `http:`, hostnames externos)
+2. GET na página do cupom → extrai CSRF token (obrigatório; lança `ScraperError('csrf_not_found')` se ausente)
+3. Busca termos em paralelo lógico (via `termsUrl`)
+4. Loop de paginação: POST em `/promotion/psp/productInfoList` com CSRF; acumula ASINs; break por `reachBottom`, `sortId` cycling, `maxPages` ou `maxProducts`
+5. Se lista vazia após paginação: fallback `[sourceAsin]`
+6. Retorna `{ asins, expiresAt }`
+
+**Degrade paths** (sem lançar exceção):
+- `termsUrl` ausente ou com erro HTTP → `expiresAt: null`
+- `participatingProductsUrl` falha de rede → fallback `[sourceAsin]` + log `warn`
+- SSRF guard rejeita URL → fallback `[sourceAsin]` + log `warn`
+
+**Precondicão**: `couponInfo.isApplicable !== true` → lança `ScraperError('not_applicable_coupon')` (erro de programação, não evento Amazon — não aciona `onBlocked`).
+
+### Parser de expiração — `extractIndividualCouponExpiration`
+
+Método em `HtmlParser` port e `CheerioHtmlParser`. Recebe **texto já parseado** (saída de `FetchIndividualCouponTerms`), não HTML. Regex ancorada na estrutura de data PT-BR:
+
+```
+/ate\s+(\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4}(?:\s+as\s+\d{1,2}:\d{2})?)/gi
+```
+
+Guard de comprimento: retorna `null` se `termsText.length > 10_000` (defesa contra ReDoS em inputs patológicos). Normaliza acentos (`até` → `ate`, `às` → `as`) antes do match.
+
 ## Integração
 
-- **F03 (applicable-scraper-pipeline)**: consome `participatingProductsUrl` para navegar à página do cupom e extrair ASINs participantes
-- **F04 (applicable-classify-and-persist)**: detecta `isApplicable === true` em `CouponScrapingService` e despacha para `processSingleApplicableCoupon`; usa `discountPercent` diretamente (sem passar por `classifyDiscount`)
+- **`CouponScrapingService` (telegram-bot, F04)**: detecta `isApplicable === true`, chama `scraper.extractApplicableCouponProducts(couponInfo, sourceAsin)` e persiste com `discount_type=PERCENTAGE`, `is_applicable=true`, `participating_asins` populado.
+- **`HtmlParser` port**: todos os `jest.Mocked<HtmlParser>` precisam incluir `extractIndividualCouponExpiration: jest.fn().mockReturnValue(null)` (campo obrigatório no port).
 
 ## Gotchas
 
 - **Fixture coupon-04 sintética** (`tests/fixtures/coupons/applicable/product-coupon-04.html`): href trocado para `/promotion/applicable/` para isolar o fluxo applicable. O fixture real (`product-coupon-04-real.html`) mantém `/promotion/psp/` intacto e é usado para regressão do bug de precedência.
-- **Release**: F02 não faz `npm publish` sozinha; release é consolidada com F03 e F06 em uma única versão (ex: `1.12.0`).
-- **`discountPercent` vs `discountText`**: applicable retorna apenas `discountPercent` (número inteiro); `discountText` pode ser `null` ou omitido — F04 usa o inteiro diretamente.
+- **Release**: F02, F03 e F06 não fazem `npm publish` individualmente; release é consolidada em uma única versão (ex: `1.12.0`).
+- **`discountPercent` vs `discountText`**: applicable retorna apenas `discountPercent` (número inteiro); `discountText` pode ser `null` — F04 usa o inteiro diretamente, sem passar por `classifyDiscount`.
+- **Paginação duplicada** (débito técnico): `ExtractApplicableCouponProducts` duplica a lógica de paginação de `ExtractCouponProducts`. Refatoração em helper compartilhado foi adiada por risco de regressão — documentar e endereçar em feature futura.
+- **`http:` rejeitado no SSRF guard**: `resolveAndValidateUrl` aceita apenas `https:`. URLs `http://www.amazon.com.br` resultam em degrade (fallback `sourceAsin`), não em erro.

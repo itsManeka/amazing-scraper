@@ -8,8 +8,10 @@ export { RetryPolicy, RetryContext, RetryDecision, RetryErrorType } from './appl
 export { UserAgentProvider } from './application/ports/UserAgentProvider';
 export type { PaginationLimits, DelayConfig } from './application/use-cases/ExtractCouponProducts';
 export type { FetchPreSalesOptions } from './application/use-cases/FetchPreSales';
+export type { ApplicableCouponResult } from './application/use-cases/ExtractApplicableCouponProducts';
 
 import { ExtractCouponProducts, DelayConfig, PaginationLimits } from './application/use-cases/ExtractCouponProducts';
+import { ExtractApplicableCouponProducts, ApplicableCouponResult } from './application/use-cases/ExtractApplicableCouponProducts';
 import { FetchProduct } from './application/use-cases/FetchProduct';
 import { FetchPreSales } from './application/use-cases/FetchPreSales';
 import { FetchIndividualCouponTerms } from './application/use-cases/FetchIndividualCouponTerms';
@@ -23,7 +25,7 @@ import { CheerioHtmlParser } from './infrastructure/parsers/CheerioHtmlParser';
 import { ConsoleLogger } from './infrastructure/logger/ConsoleLogger';
 import { Logger } from './application/ports/Logger';
 import { ScraperError } from './domain/errors';
-import { CouponInfo, CouponResult, FetchPreSalesResult, ProductPage } from './domain/entities';
+import { CouponInfo, CouponResult, FetchPreSalesResult, ProductPage, IndividualCouponInfo } from './domain/entities';
 import { FetchPreSalesOptions } from './application/use-cases/FetchPreSales';
 
 /**
@@ -76,6 +78,32 @@ export interface AmazonCouponScraper {
    * selector is absent.
    */
   fetchIndividualCouponTerms(termsUrl: string): Promise<string | null>;
+  /**
+   * Extracts products participating in an applicable coupon (pattern: "Aplicar cupom de X%").
+   * Requires `IndividualCouponInfo` with `isApplicable === true` previously obtained from `fetchProduct`.
+   *
+   * Two flows:
+   * - **Coupon-03** (no participating products page): returns `{ asins: [sourceAsin], expiresAt }` only.
+   * - **Coupon-04** (with participating products page): fetches the page, paginates through products,
+   *   and returns all participating ASINs or falls back to `[sourceAsin]` if none found.
+   *
+   * Always extracts expiration date from coupon terms (via `fetchIndividualCouponTerms`).
+   *
+   * @example
+   * ```typescript
+   * if (page.individualCouponInfo?.isApplicable) {
+   *   const result = await scraper.extractApplicableCouponProducts(
+   *     page.individualCouponInfo,
+   *     page.asin,
+   *   );
+   *   console.log(result.asins, result.expiresAt);
+   * }
+   * ```
+   */
+  extractApplicableCouponProducts(
+    couponInfo: IndividualCouponInfo,
+    sourceAsin: string,
+  ): Promise<ApplicableCouponResult>;
 }
 
 /**
@@ -121,6 +149,10 @@ export function createScraper(options?: ScraperOptions): AmazonCouponScraper {
   const fetchIndividualCouponTermsUseCase = new FetchIndividualCouponTerms(
     httpClient, htmlParser, logger, userAgentProvider,
   );
+  const extractApplicableCouponUseCase = new ExtractApplicableCouponProducts(
+    httpClient, htmlParser, logger, userAgentProvider, retryPolicy, fetchIndividualCouponTermsUseCase, onBlocked,
+    options?.delayMs, options?.paginationLimits,
+  );
 
   return {
     fetchProduct: (asin: string) => fetchProductUseCase.execute(asin),
@@ -128,5 +160,7 @@ export function createScraper(options?: ScraperOptions): AmazonCouponScraper {
     fetchPreSales: (opts?: FetchPreSalesOptions) => fetchPreSalesUseCase.execute(opts),
     fetchIndividualCouponTerms: (termsUrl: string) =>
       fetchIndividualCouponTermsUseCase.execute(termsUrl),
+    extractApplicableCouponProducts: (couponInfo: IndividualCouponInfo, sourceAsin: string) =>
+      extractApplicableCouponUseCase.execute(couponInfo, sourceAsin),
   };
 }
