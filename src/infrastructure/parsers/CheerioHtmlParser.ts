@@ -199,6 +199,8 @@ export class CheerioHtmlParser implements HtmlParser {
     // so this fallback will only match true PSP promotions.
     if (!couponHref) {
       let fallbackInfo: CouponInfo | null = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TODO: usar AnyNode de domhandler quando cheerio re-exportar o tipo
+      let fallbackContainer: cheerio.Cheerio<any> | undefined;
       $('[data-csa-c-owner="PromotionsDiscovery"]').each((_, el) => {
         if (fallbackInfo) return;
 
@@ -227,9 +229,15 @@ export class CheerioHtmlParser implements HtmlParser {
             promotionMerchantId: redirectMerchantId,
             couponCode: null,
           };
+          // Store the container element (the DOM node) for scoped coupon code extraction
+          fallbackContainer = $(el);
         }
       });
       if (fallbackInfo) {
+        // Extract coupon code from within the scoped container
+        // FORCE: only use container-scoped extraction, never fall back to global
+        const couponCode = fallbackContainer ? this.extractCouponCode($, fallbackContainer) : null;
+        (fallbackInfo as CouponInfo).couponCode = couponCode;
         return fallbackInfo;
       }
     }
@@ -238,7 +246,20 @@ export class CheerioHtmlParser implements HtmlParser {
       return null;
     }
 
-    const couponCode = this.extractCouponCode($);
+    // Derive scoped container from couponHref to prevent cross-coupon code leak (f07)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TODO: usar AnyNode de domhandler quando cheerio re-exportar o tipo
+    let scopedContainer: cheerio.Cheerio<any> | undefined;
+    const hrefPromotionMatch = (couponHref as string).match(/\/promotion\/psp\/([A-Z0-9]+)/);
+    const hrefPromotionId = hrefPromotionMatch?.[1];
+    if (hrefPromotionId) {
+      const candidate = $(`[data-csa-c-item-id*="amzn1.promotion.${hrefPromotionId}"]`).first()
+        .closest('[data-csa-c-owner="PromotionsDiscovery"]');
+      if (candidate.length > 0) {
+        scopedContainer = candidate;
+      }
+    }
+
+    const couponCode = this.extractCouponCode($, scopedContainer);
     const info = this.parseCouponHref(couponHref);
     if (info) {
       info.couponCode = couponCode;
@@ -956,8 +977,15 @@ export class CheerioHtmlParser implements HtmlParser {
    * Extracts a coupon code from the product page text.
    * Looks for patterns like "com o cupom FJOVKLWWIZXM", "cupom FJOVKLWWIZXM", or "Insira o código GEEK15"
    * in coupon-related elements and their surrounding context.
+   *
+   * When a container is provided, searches only within that container (no global fallback).
+   * When container is omitted, uses the original global fallback for backward compatibility.
    */
-  private extractCouponCode($: cheerio.CheerioAPI): string | null {
+  private extractCouponCode(
+    $: cheerio.CheerioAPI,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TODO: usar AnyNode de domhandler quando cheerio re-exportar o tipo
+    container?: cheerio.Cheerio<any>,
+  ): string | null {
     // Selectors likely to contain coupon text on Amazon product pages
     const selectors = [
       '[id*="coupon"]',
@@ -967,6 +995,57 @@ export class CheerioHtmlParser implements HtmlParser {
       '#vpcButton',
     ];
 
+    // If container is provided, search only within that container
+    if (container && container.length > 0) {
+      // For scoped extraction (e.g., Pattern 5 PSP fallback), search ONLY within this container
+      // Do NOT use the global fallback (#centerCol, #apex_desktop, etc.)
+      // This ensures that we do not pick up codes from sibling coupon containers.
+
+      // Strategy: Look for promo text in specific, well-known element patterns
+      // These patterns are designed to avoid nested [data-csa-c-owner] containers
+
+      // First: direct text content from immediate children (not recursive descent on nested coupons)
+      // Use jQuery's `.children()` which only gets direct children
+      const directChildren = container.children();
+      for (let i = 0; i < directChildren.length; i++) {
+        const child = directChildren.eq(i);
+        // Skip nested PromotionsDiscovery containers entirely
+        if (child.is('[data-csa-c-owner="PromotionsDiscovery"]')) {
+          continue;
+        }
+        const text = child.text();
+        const code = this.matchCouponCode(text);
+        if (code) return code;
+      }
+
+      // Second: search for specific element patterns that usually contain coupon text
+      // but explicitly exclude any nested [data-csa-c-owner] containers
+      const couponPatterns = [
+        '[id*="coupon"]',
+        '[id*="promo"]',
+        '[class*="cupom"]',
+        '[class*="promo"]',
+      ];
+
+      for (const pattern of couponPatterns) {
+        const matches = container.find(pattern);
+        for (let i = 0; i < matches.length; i++) {
+          const el = matches.eq(i);
+          // Skip nested coupon containers
+          if (el.is('[data-csa-c-owner="PromotionsDiscovery"]')) {
+            continue;
+          }
+          const text = el.text();
+          const code = this.matchCouponCode(text);
+          if (code) return code;
+        }
+      }
+
+      // No code found in scoped container
+      return null;
+    }
+
+    // Original behavior when no container is provided (backward compatibility)
     // Search in element text and parent containers
     for (const sel of selectors) {
       const elements = $(sel);

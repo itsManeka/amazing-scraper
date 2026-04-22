@@ -7,6 +7,7 @@ describe('CheerioHtmlParser — coupon code extraction regression (F06)', () => 
   let parser: CheerioHtmlParser;
   let coupon01ProductHtml: string;
   let coupon02ProductHtml: string;
+  let coupon05ProductHtml: string;
 
   beforeAll(() => {
     const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -16,6 +17,10 @@ describe('CheerioHtmlParser — coupon code extraction regression (F06)', () => 
     );
     coupon02ProductHtml = fs.readFileSync(
       path.join(fixturesDir, 'coupons/coupon-02-product.html'),
+      'utf-8',
+    );
+    coupon05ProductHtml = fs.readFileSync(
+      path.join(fixturesDir, 'coupons/coupon-05-product.html'),
       'utf-8',
     );
   });
@@ -109,6 +114,43 @@ describe('CheerioHtmlParser — coupon code extraction regression (F06)', () => 
       const $ = cheerio.load(minimalHtml);
       const result = (parser as unknown as Record<string, (arg: cheerio.CheerioAPI) => string | null>).extractCouponCode($);
       expect(result).toBe('GEEK15');
+    });
+  });
+
+  describe('[Cenario 6] coupon-05 fixture — multiple simultaneous coupons (RED: must fail on baseline)', () => {
+    it('loads coupon-05-product.html fixture (B0BFYX32MW Galapagos Dungeon Fighter)', () => {
+      expect(coupon05ProductHtml).toBeTruthy();
+      expect(coupon05ProductHtml.length).toBeGreaterThan(0);
+    });
+
+    it('extracts a coupon from coupon-05 via Pattern 5 fallback (PSP condicional)', () => {
+      const result = parser.extractCouponInfo(coupon05ProductHtml);
+      expect(result).not.toBeNull();
+      // Based on T1 diagnosis, Pattern 5 returns promotionId A32IKNS6LFS4SH (Economize R$30 cupom)
+      expect(result!.promotionId).toBeDefined();
+    });
+
+    it('[CRITICAL REGRESSION] coupon-05 couponCode MUST NOT be "COMPRANOAPP" (leak detection)', () => {
+      const result = parser.extractCouponInfo(coupon05ProductHtml);
+      expect(result).not.toBeNull();
+      // The bug: Pattern 5 cupom (A32IKNS6LFS4SH / "Economize R$30") inherits COMPRANOAPP from container 1
+      // This assert should FAIL on baseline (before T3 fix), proving bug reproducibility
+      expect(result!.couponCode).not.toBe('COMPRANOAPP');
+    });
+
+    it('[CRITICAL REGRESSION] coupon-05 couponCode should be null (no code in container 2 text)', () => {
+      const result = parser.extractCouponInfo(coupon05ProductHtml);
+      expect(result).not.toBeNull();
+      // Strict assertion: cupom from container 2 (Economize R$30) has no inline code, so must be null
+      expect(result!.couponCode).toBeNull();
+    });
+
+    it('coupon-05 result object does not leak COMPRANOAPP into any field', () => {
+      const result = parser.extractCouponInfo(coupon05ProductHtml);
+      expect(result).not.toBeNull();
+      // Defensive check: convert result to string and verify no COMPRANOAPP trace
+      const resultStr = JSON.stringify(result);
+      expect(resultStr).not.toContain('COMPRANOAPP');
     });
   });
 });
