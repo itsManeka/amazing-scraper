@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.13.1...v1.14.0) (2026-04-22)
+
+
+### Features
+
+* **scraper:** extract applicable coupon products and expiration ([24bec98](https://github.com/itsmaneka/amazing-scraper/commit/24bec98dd403d9d03017bf881a8f09d003fa4c1c))
+
 ## [1.13.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.13.0...v1.13.1) (2026-04-20)
 
 
