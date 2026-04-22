@@ -1,3 +1,10 @@
+## [1.14.1](https://github.com/itsmaneka/amazing-scraper/compare/v1.14.0...v1.14.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* **parser:** scope coupon code extraction to source container ([79841af](https://github.com/itsmaneka/amazing-scraper/commit/79841af9bd3d8b4cda6542f83990b98f2f823a38))
+
 # [1.14.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.13.1...v1.14.0) (2026-04-22)
 
 
