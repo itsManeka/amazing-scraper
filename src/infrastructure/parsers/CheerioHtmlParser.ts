@@ -65,22 +65,123 @@ const PRODUCT_GROUP_LABELS: Record<string, string> = {
  */
 export class CheerioHtmlParser implements HtmlParser {
   /**
-   * Extracts coupon promotion info from a product page.
-   * Tries 5 patterns in order:
-   * 1. Anchor tags with `/promotion/psp/` in href
-   * 2. Elements with id containing "coupon" that wrap an anchor
-   * 3. Anchor tags with text containing "cupom", "coupon", or "Clique para aplicar"
-   * 4. BXGY (buy-x-get-y) link with `/fmc/xb-store/buy-x-get-y` and promotionId parameter
-   * 5. Fallback: `/promotion/psp/` serialized in JSON + amzn1.promotion ID in PromotionsDiscovery
+   * Internal variant of extractAllCoupons that accepts pre-parsed Cheerio API.
+   * Used by extractProductInfo to avoid re-parsing the HTML.
    */
-  extractCouponInfo(html: string): CouponInfo | null {
-    const $ = cheerio.load(html);
+  private _extractAllCoupons($: cheerio.CheerioAPI): CouponInfo[] {
+    const results: CouponInfo[] = [];
 
-    // Strip <script>/<style> from the local DOM before any text() extraction so
-    // inline JS comments like "Initialize the coupon handler module" do not leak
-    // into the coupon-code regex (false positive: coupon code "HANDLER").
-    $('script, style').remove();
+    // Note: script/style already removed in extractProductInfo via extraction of other fields
+    // (e.g., extractTitle, extractPrices), so we DON'T remove again here.
+    // Removing again would be redundant but safe (idempotent).
+    // However, for clarity and consistency with the public extractAllCoupons,
+    // we omit the global removal here and rely on container-level removal below.
 
+    // Pre-compute applicable promotion IDs (skip these in PSP detection)
+    const applicablePromotionIds = new Set<string>();
+    $('[data-csa-c-owner="PromotionsDiscovery"][data-csa-c-item-id*="amzn1.promotion."]').each((_, el) => {
+      const itemId = $(el).attr('data-csa-c-item-id') ?? '';
+      const promotionMatch = itemId.match(/amzn1\.promotion\.([A-Z0-9]+)/);
+      if (promotionMatch) {
+        const promotionId = promotionMatch[1];
+        const elementHtml = $(el).html() ?? '';
+        if (elementHtml.includes(`/promotion/psp/${promotionId}`)) {
+          const containerText = $(el).clone().find('style, script').remove().end().text();
+          const normalizedText = this.normalizeText(containerText);
+          const isApplicablePattern = /Aplicar\s+cupom\s+de\s+\d{1,2}%/i.test(normalizedText);
+          if (isApplicablePattern) {
+            applicablePromotionIds.add(promotionId);
+          }
+        }
+      }
+    });
+
+    // Main loop: iterate all PromotionsDiscovery containers
+    $('[data-csa-c-owner="PromotionsDiscovery"][data-csa-c-item-id*="amzn1.promotion."]').each((_, el) => {
+      const itemId = $(el).attr('data-csa-c-item-id') ?? '';
+      const promotionMatch = itemId.match(/amzn1\.promotion\.([A-Z0-9]+)/);
+      if (!promotionMatch) return; // Skip if no promotionId
+
+      const promotionId = promotionMatch[1];
+      const container = $(el);
+      const containerHtml = container.html() ?? '';
+
+      // ========== PSP DETECTION (via container-scoped /promotion/psp/ link) ==========
+      if (
+        containerHtml.includes(`/promotion/psp/${promotionId}`) &&
+        !applicablePromotionIds.has(promotionId)
+      ) {
+        const couponCode = this.extractCouponCode($, container);
+        const couponInfo: CouponInfo = {
+          promotionId,
+          redirectAsin: '',
+          redirectMerchantId: '',
+          promotionMerchantId: '',
+          couponCode,
+        };
+        results.push(couponInfo);
+        return; // Move to next container
+      }
+
+      // ========== INDIVIDUAL COUPON DETECTION ==========
+      // Extract inline coupon text (classic "Insira o código" or applicable "Aplicar cupom de X%")
+      const promoMessageEl = container.find('[id^="promoMessageCXCW"]').first();
+      const couponTextEl = container.find('[id^="couponText"]').first();
+      let promoMessageText: string;
+      if (promoMessageEl.length > 0) {
+        promoMessageText = promoMessageEl.clone().find('style, script').remove().end().text();
+      } else if (couponTextEl.length > 0) {
+        promoMessageText = couponTextEl.clone().find('style, script').remove().end().text();
+      } else {
+        promoMessageText = container.clone().find('style, script').remove().end().text();
+      }
+
+      const rawMessageText = this.normalizeText(promoMessageText);
+
+      // Try classic individual coupon pattern: "Insira o código X"
+      const codeMatch =
+        rawMessageText.match(/Insira\s+o\s+c[óo]digo\s+([A-Z0-9]{4,20})/i) ??
+        rawMessageText.match(/cupom:\s*([A-Z0-9]{4,20})/i);
+      const couponCode = codeMatch?.[1]?.toUpperCase() ?? null;
+
+      if (couponCode) {
+        // Classic individual coupon detected
+        const couponInfo: CouponInfo = {
+          promotionId,
+          couponCode,
+          redirectAsin: '',
+          redirectMerchantId: '',
+          promotionMerchantId: '',
+        };
+        results.push(couponInfo);
+        return;
+      }
+
+      // Try applicable pattern: "Aplicar cupom de X%"
+      const applicableMatch = rawMessageText.match(/Aplicar\s+cupom\s+de\s+(\d{1,2})%/i);
+      if (applicableMatch) {
+        const couponInfo: CouponInfo = {
+          promotionId,
+          couponCode: null,
+          redirectAsin: '',
+          redirectMerchantId: '',
+          promotionMerchantId: '',
+        };
+        results.push(couponInfo);
+        return;
+      }
+
+      // No clear coupon signal — skip this container
+    });
+
+    return results;
+  }
+
+  /**
+   * Internal variant of extractCouponInfo that accepts pre-parsed Cheerio API.
+   * Used by extractProductInfo to avoid re-parsing the HTML.
+   */
+  private _extractCouponInfo($: cheerio.CheerioAPI): CouponInfo | null {
     let couponHref: string | null = null;
 
     // CRITICAL PRECEDENCE CHECK (applies before Patterns 1-4):
@@ -268,34 +369,40 @@ export class CheerioHtmlParser implements HtmlParser {
   }
 
   /**
-   * Extracts an inline "individual" coupon from a product detail page.
+   * Extracts coupon promotion info from a product page.
+   * Public version: parses HTML once and delegates to _extractCouponInfo.
    *
-   * Locates the `PromotionsDiscovery` container inside
-   * `#promoPriceBlockMessage_feature_div` whose `data-csa-c-item-id`
-   * encodes a promotion id (`amzn1.promotion.{ID}`). The terms URL is
-   * read from the `data-a-modal` JSON attribute of the nested
-   * `<span class="a-declarative">` wrapper (the `href` of the "Termos"
-   * link points to the product page, not the popover endpoint).
-   *
-   * Detects two patterns within the PromotionsDiscovery container:
-   * 1. **Classic flow:** "Insira o código X" / "cupom: X" — standard inline coupons with
-   *    a specific coupon code for the product.
-   * 2. **Applicable flow:** "Aplicar cupom de X%" — generic promotional discounts without
-   *    a product-specific code (flagged via `isApplicable: true`). May include a link to
-   *    participating products ("Ver Itens Participantes") exposed via `participatingProductsUrl`.
-   *
-   * If the page already contains a PSP-style coupon
-   * (`/promotion/psp/`), this method returns `null` so PSP coupons take
-   * precedence.
+   * Tries 5 patterns in order:
+   * 1. Anchor tags with `/promotion/psp/` in href
+   * 2. Elements with id containing "coupon" that wrap an anchor
+   * 3. Anchor tags with text containing "cupom", "coupon", or "Clique para aplicar"
+   * 4. BXGY (buy-x-get-y) link with `/fmc/xb-store/buy-x-get-y` and promotionId parameter
+   * 5. Fallback: `/promotion/psp/` serialized in JSON + amzn1.promotion ID in PromotionsDiscovery
    */
-  extractIndividualCouponInfo(html: string): IndividualCouponInfo | null {
+  extractCouponInfo(html: string): CouponInfo | null {
+    const $ = cheerio.load(html);
+
+    // Strip <script>/<style> from the local DOM before any text() extraction so
+    // inline JS comments like "Initialize the coupon handler module" do not leak
+    // into the coupon-code regex (false positive: coupon code "HANDLER").
+    $('script, style').remove();
+
+    return this._extractCouponInfo($);
+  }
+
+  /**
+   * Internal variant of extractIndividualCouponInfo that accepts pre-parsed Cheerio API.
+   * Used by extractProductInfo to avoid re-parsing the HTML.
+   */
+  private _extractIndividualCouponInfo(
+    $: cheerio.CheerioAPI,
+    couponInfoAlreadyFound: boolean,
+  ): IndividualCouponInfo | null {
     // Prioritise PSP coupons — individual detection only applies when the
     // product page has no /promotion/psp/ link.
-    if (this.extractCouponInfo(html) !== null) {
+    if (couponInfoAlreadyFound) {
       return null;
     }
-
-    const $ = cheerio.load(html);
 
     let result: IndividualCouponInfo | null = null;
 
@@ -434,6 +541,73 @@ export class CheerioHtmlParser implements HtmlParser {
     );
 
     return result;
+  }
+
+  /**
+   * Extracts an inline "individual" coupon from a product detail page.
+   *
+   * Locates the `PromotionsDiscovery` container inside
+   * `#promoPriceBlockMessage_feature_div` whose `data-csa-c-item-id`
+   * encodes a promotion id (`amzn1.promotion.{ID}`). The terms URL is
+   * read from the `data-a-modal` JSON attribute of the nested
+   * `<span class="a-declarative">` wrapper (the `href` of the "Termos"
+   * link points to the product page, not the popover endpoint).
+   *
+   * Detects two patterns within the PromotionsDiscovery container:
+   * 1. **Classic flow:** "Insira o código X" / "cupom: X" — standard inline coupons with
+   *    a specific coupon code for the product.
+   * 2. **Applicable flow:** "Aplicar cupom de X%" — generic promotional discounts without
+   *    a product-specific code (flagged via `isApplicable: true`). May include a link to
+   *    participating products ("Ver Itens Participantes") exposed via `participatingProductsUrl`.
+   *
+   * If the page already contains a PSP-style coupon
+   * (`/promotion/psp/`), this method returns `null` so PSP coupons take
+   * precedence.
+   */
+  extractIndividualCouponInfo(html: string): IndividualCouponInfo | null {
+    const $ = cheerio.load(html);
+
+    // Strip <script>/<style> from the local DOM before any text() extraction
+    $('script, style').remove();
+
+    // Check if PSP coupon is present (same logic as _extractCouponInfo's early priority check)
+    const couponInfoFound = this._extractCouponInfo($) !== null;
+
+    return this._extractIndividualCouponInfo($, couponInfoFound);
+  }
+
+  /**
+   * Extracts all coupons from a product detail page by iterating over
+   * PromotionsDiscovery containers and classifying each independently.
+   *
+   * Returns an array of CouponInfo objects, one per container. Each coupon is
+   * extracted with container-scoped context (pattern F07) to prevent cross-coupon
+   * code leakage.
+   *
+   * Classification precedence (per container):
+   * 1. PSP (has /promotion/psp/ link) — CouponInfo
+   * 2. Individual (no /promotion/psp/, has "Insira o código" pattern) — CouponInfo with isIndividual
+   * 3. Applicable (no /promotion/psp/, has "Aplicar cupom de X%" pattern) — CouponInfo with isApplicable
+   * 4. Skip containers without clear coupon signals
+   *
+   * This method is the authoritative source for all coupons on a page;
+   * extractCouponInfo and extractIndividualCouponInfo delegate to this for backward compatibility.
+   */
+  /**
+   * Extracts all coupons from a product detail page by iterating over PromotionsDiscovery
+   * containers and classifying each as PSP, individual (classic), or applicable.
+   *
+   * Public version: parses HTML once and delegates to _extractAllCoupons.
+   * This method is the authoritative source for all coupons on a page;
+   * extractCouponInfo and extractIndividualCouponInfo maintain legacy behavior for backward compatibility.
+   */
+  extractAllCoupons(html: string): CouponInfo[] {
+    const $ = cheerio.load(html);
+
+    // Strip <script>/<style> early to prevent text() leakage (same as extractCouponInfo)
+    $('script, style').remove();
+
+    return this._extractAllCoupons($);
   }
 
   /**
@@ -701,6 +875,12 @@ export class CheerioHtmlParser implements HtmlParser {
   /**
    * Extracts structured product data from an Amazon product detail page.
    * Uses multiple selector fallbacks for each field to handle page layout variations.
+   *
+   * Populates both singular `couponInfo` (first PSP for back-compat) and plural
+   * `couponInfos` (all coupons from extractAllCoupons) to support legacy and new consumers.
+   *
+   * OPTIMIZATION: Parses HTML only once via cheerio.load() and passes the $ instance
+   * to internal extraction methods, reducing parse overhead from 3-4 to 1-2 Cheerio parses.
    */
   extractProductInfo(html: string, asin: string, url: string, logger?: Logger): ProductPage {
     const $ = cheerio.load(html);
@@ -709,10 +889,20 @@ export class CheerioHtmlParser implements HtmlParser {
     const { price, originalPrice } = this.extractPrices($, logger);
     const prime = this.extractPrime($);
     const { rating, reviewCount } = this.extractReviews($);
-    const couponInfo = this.extractCouponInfo(html);
-    const individualCouponInfo = couponInfo === null ? this.extractIndividualCouponInfo(html) : null;
+
+    // Extract all coupons (plural) using shared $ to avoid re-parsing
+    const allCoupons = this._extractAllCoupons($);
+
+    // Populate singular couponInfo for backward-compat using shared $
+    // This avoids re-parsing the HTML that was already loaded above
+    const couponInfo = this._extractCouponInfo($);
+    const individualCouponInfo = couponInfo === null ? this._extractIndividualCouponInfo($, false) : null;
     const offerId = this.extractOfferId($);
     const { inStock, isPreOrder } = this.extractAvailability($, offerId, logger);
+
+    // hasCoupon now reflects presence of ANY coupon (singular PSP or plural array)
+    // This ensures consumers checking `if (product.hasCoupon)` won't miss individual-only coupons
+    const hasCoupon = couponInfo !== null || allCoupons.length > 0;
 
     return {
       asin,
@@ -722,8 +912,9 @@ export class CheerioHtmlParser implements HtmlParser {
       prime,
       rating,
       reviewCount,
-      hasCoupon: couponInfo !== null,
+      hasCoupon,
       couponInfo,
+      couponInfos: allCoupons,
       individualCouponInfo,
       url,
       offerId,

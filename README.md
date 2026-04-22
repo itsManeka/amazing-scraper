@@ -40,6 +40,11 @@ if (page.hasCoupon && page.couponInfo) {
   console.log(`No coupon found for ASIN ${page.asin}`);
 }
 
+// Products may have multiple coupons on the same page — iterate couponInfos for all of them
+for (const couponInfo of page.couponInfos) {
+  console.log(`Coupon: ${couponInfo.promotionId}`);
+}
+
 // Or: Fetch pre-sale ASINs from HQ & Manga category
 const preSales = await scraper.fetchPreSales({ limit: 3 });
 console.log(`Found ${preSales.asins.length} pre-sale ASINs`);
@@ -79,7 +84,8 @@ interface ProductPage {
   rating: number;
   reviewCount: number;
   hasCoupon: boolean;
-  couponInfo: CouponInfo | null;
+  couponInfo: CouponInfo | null;  // First PSP coupon found; null when only individual coupons are present
+  couponInfos: CouponInfo[];      // All coupons on the page (PSP and individual); use this to capture multiple coupons per product
   url: string;
   offerId?: string;        // Offer listing ID from the buy-box
   inStock: boolean;

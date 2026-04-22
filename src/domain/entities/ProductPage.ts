@@ -32,6 +32,13 @@ export interface ProductPage {
   /** Coupon promotion details, or `null` when no coupon is present. */
   couponInfo: CouponInfo | null;
   /**
+   * Array of all coupons discovered on the product page.
+   * Populated via `extractAllCoupons` to capture multiple PSP/individual coupons
+   * on the same PDP. Empty array `[]` when no coupons are present.
+   * Aditivo field (F08, Opcao C) — does not break legacy `couponInfo` singular.
+   */
+  couponInfos: CouponInfo[];
+  /**
    * Inline "individual" coupon details discovered on the product page when no
    * PSP-style coupon was found. Populated only when `couponInfo` is `null` and
    * the page renders a `PromotionsDiscovery` block with a "Termos" popover.

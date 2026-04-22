@@ -19,6 +19,7 @@ const PRODUCT_PAGE: ProductPage = {
   reviewCount: 1234,
   hasCoupon: false,
   couponInfo: null,
+  couponInfos: [],
   url: 'https://www.amazon.com.br/dp/B0TEST',
   offerId: undefined,
   inStock: true,
@@ -155,6 +156,15 @@ describe('FetchProduct', () => {
           promotionMerchantId: 'MERCH1',
           couponCode: null,
         },
+        couponInfos: [
+          {
+            promotionId: 'PROMO123',
+            redirectAsin: 'B0TEST',
+            redirectMerchantId: 'MERCH1',
+            promotionMerchantId: 'MERCH1',
+            couponCode: null,
+          },
+        ],
       };
 
       mocks.httpClient.get.mockResolvedValueOnce(ok('<html>coupon product</html>'));

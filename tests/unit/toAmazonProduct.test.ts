@@ -38,6 +38,7 @@ const BASE_PAGE: ProductPage = {
   reviewCount: 100,
   hasCoupon: false,
   couponInfo: null,
+  couponInfos: [],
   url: 'https://www.amazon.com.br/dp/B0TEST1',
   offerId: 'A1ZZFT5FULY4LN',
   inStock: true,
