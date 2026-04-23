@@ -145,13 +145,18 @@ export class CheerioHtmlParser implements HtmlParser {
       const couponCode = codeMatch?.[1]?.toUpperCase() ?? null;
 
       if (couponCode) {
-        // Classic individual coupon detected
+        // Classic individual coupon detected — extract full metadata from this container
+        const metadata = this._extractIndividualMetadataFromContainer($, container);
         const couponInfo: CouponInfo = {
           promotionId,
           couponCode,
           redirectAsin: '',
           redirectMerchantId: '',
           promotionMerchantId: '',
+          isIndividual: true,
+          discountText: metadata?.discountText ?? null,
+          description: metadata?.description ?? null,
+          termsUrl: metadata?.termsUrl ?? null,
         };
         results.push(couponInfo);
         return;
@@ -160,12 +165,38 @@ export class CheerioHtmlParser implements HtmlParser {
       // Try applicable pattern: "Aplicar cupom de X%"
       const applicableMatch = rawMessageText.match(/Aplicar\s+cupom\s+de\s+(\d{1,2})%/i);
       if (applicableMatch) {
+        const discountPercent = Number(applicableMatch[1]);
+
+        // Extract participatingProductsUrl: href of "Ver Itens Participantes" link
+        let participatingProductsUrl: string | null = null;
+        const participatingLink = container
+          .find('a')
+          .filter((_, linkEl) => {
+            const linkText = this.normalizeText($(linkEl).text());
+            return /Ver\s+Itens\s+Participantes/i.test(linkText);
+          })
+          .first();
+        if (participatingLink.length > 0) {
+          const href = participatingLink.attr('href');
+          if (href && href.length > 0) {
+            participatingProductsUrl = href;
+          }
+        }
+
+        // Extract description and termsUrl using the helper
+        const metadata = this._extractIndividualMetadataFromContainer($, container);
+
         const couponInfo: CouponInfo = {
           promotionId,
           couponCode: null,
           redirectAsin: '',
           redirectMerchantId: '',
           promotionMerchantId: '',
+          isApplicable: true,
+          discountPercent,
+          participatingProductsUrl,
+          description: metadata?.description ?? null,
+          termsUrl: metadata?.termsUrl ?? null,
         };
         results.push(couponInfo);
         return;
@@ -175,6 +206,66 @@ export class CheerioHtmlParser implements HtmlParser {
     });
 
     return results;
+  }
+
+  /**
+   * Helper: Extracts individual coupon metadata (discountText, description, termsUrl)
+   * from a specific container element (already a Cheerio selection).
+   * Used by _extractAllCoupons when individual coupon pattern is detected.
+   *
+   * Returns an object with the extracted metadata fields, or null if extraction fails.
+   */
+  private _extractIndividualMetadataFromContainer(
+    $: cheerio.CheerioAPI,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TODO: usar AnyNode de domhandler quando cheerio re-exportar o tipo
+    container: cheerio.Cheerio<any>,
+  ): { discountText: string | null; description: string | null; termsUrl: string | null } | null {
+    try {
+      // 1. discountText: badge element (label) adjacent to promoMessageCXCW
+      const rawDiscountText =
+        this.normalizeText(container.find('label').first().text()) ||
+        this.normalizeText(container.find('.recommended-discovery').first().text()) ||
+        null;
+      const discountText = rawDiscountText && rawDiscountText.length > 0 ? rawDiscountText : null;
+
+      // 2. Clean description from the inline promo message
+      const promoMessageEl = container.find('[id^="promoMessageCXCW"]').first();
+      const couponTextEl = container.find('[id^="couponText"]').first();
+      let promoMessageText: string;
+      if (promoMessageEl.length > 0) {
+        promoMessageText = promoMessageEl.clone().find('style, script').remove().end().text();
+      } else if (couponTextEl.length > 0) {
+        promoMessageText = couponTextEl.clone().find('style, script').remove().end().text();
+      } else {
+        promoMessageText = container.clone().find('style, script').remove().end().text();
+      }
+      const rawMessageText = this.normalizeText(promoMessageText);
+      const cleanedMessage = rawMessageText
+        .replace(/^\s*off\.\s*/i, '')
+        .replace(/\s+\|\s*Ver\s+Itens\s+Participantes\s*/i, '')
+        .replace(/\s*Termos\s*$/, '')
+        .trim();
+      const description = cleanedMessage.length > 0 ? cleanedMessage : null;
+
+      // 3. termsUrl: parse JSON in data-a-modal
+      let termsUrl: string | null = null;
+      const modalAttr = container.find('[data-a-modal]').first().attr('data-a-modal');
+      if (modalAttr) {
+        try {
+          const parsed = JSON.parse(modalAttr) as { url?: unknown };
+          if (typeof parsed.url === 'string' && parsed.url.length > 0) {
+            termsUrl = parsed.url;
+          }
+        } catch {
+          // Malformed JSON — fall back to null
+        }
+      }
+
+      return { discountText, description, termsUrl };
+    } catch {
+      // Defensive: if any extraction fails, return null
+      return null;
+    }
   }
 
   /**

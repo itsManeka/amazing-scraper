@@ -40,9 +40,21 @@ if (page.hasCoupon && page.couponInfo) {
   console.log(`No coupon found for ASIN ${page.asin}`);
 }
 
-// Products may have multiple coupons on the same page — iterate couponInfos for all of them
+// Products may have multiple coupons — iterate couponInfos and dispatch by type flag
 for (const couponInfo of page.couponInfos) {
-  console.log(`Coupon: ${couponInfo.promotionId}`);
+  if (couponInfo.isApplicable) {
+    // Automatic checkout coupon (no code); use extractApplicableCouponProducts
+    const result = await scraper.extractApplicableCouponProducts(couponInfo as IndividualCouponInfo, page.asin);
+    console.log(`Applicable: ${couponInfo.discountPercent}% off — ${result.asins.length} ASINs`);
+  } else if (couponInfo.isIndividual) {
+    // Inline coupon with code; title/description/termsUrl available directly
+    console.log(`Individual: ${couponInfo.discountText} off with code ${couponInfo.couponCode}`);
+    console.log(`Terms: ${couponInfo.description}`);
+  } else {
+    // PSP coupon; use extractCouponProducts for full product list
+    const result = await scraper.extractCouponProducts(couponInfo);
+    console.log(`PSP: ${result.metadata?.title} — ${result.totalProducts} products`);
+  }
 }
 
 // Or: Fetch pre-sale ASINs from HQ & Manga category
@@ -85,7 +97,7 @@ interface ProductPage {
   reviewCount: number;
   hasCoupon: boolean;
   couponInfo: CouponInfo | null;  // First PSP coupon found; null when only individual coupons are present
-  couponInfos: CouponInfo[];      // All coupons on the page (PSP and individual); use this to capture multiple coupons per product
+  couponInfos: CouponInfo[];      // All coupons on the page; each entry carries discriminating flags (isIndividual, isApplicable) — use these to dispatch without a second DOM pass
   url: string;
   offerId?: string;        // Offer listing ID from the buy-box
   inStock: boolean;
@@ -95,6 +107,26 @@ interface ProductPage {
   publisher?: string;      // e.g. "Intrínseca", "Panini"
   contributors?: string[]; // e.g. ["Author (Autor)", "Translator (Tradutor)"]
   productGroup?: string;   // e.g. "book_display_on_website"
+}
+```
+
+### `CouponInfo`
+
+Base type for all coupons returned in `couponInfos`. PSP coupons carry only `promotionId` and `couponCode`; individual and applicable coupons carry additional fields set by the parser.
+
+```typescript
+interface CouponInfo {
+  promotionId: string;
+  couponCode: string | null;
+  // Discriminating flags (set for inline coupons; absent or false for PSP coupons)
+  isIndividual?: true;                        // Classic inline coupon with a code ("Insira o código")
+  isApplicable?: boolean;                     // Automatic checkout coupon (no code required)
+  // Inline metadata (present when isIndividual or isApplicable is set)
+  discountText?: string | null;               // Badge value: "R$20", "20%", etc.
+  description?: string | null;               // Cleaned terms text from the inline block
+  termsUrl?: string | null;                  // URL to fetch coupon terms/conditions
+  discountPercent?: number | null;           // Numeric value for applicable coupons (e.g. 10 for "10% off")
+  participatingProductsUrl?: string | null;  // Coupon page URL when applicable has a product list
 }
 ```
 
