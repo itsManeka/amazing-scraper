@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.15.0...v1.16.0) (2026-04-23)
+
+
+### Features
+
+* **parser:** carry discriminating flags on all couponInfos entries ([aab34cd](https://github.com/itsmaneka/amazing-scraper/commit/aab34cd171eedd2527c2578f98e9b24d7ac4fb4a))
+
 # [1.15.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.14.1...v1.15.0) (2026-04-22)
 
 
