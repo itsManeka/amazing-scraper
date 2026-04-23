@@ -77,6 +77,7 @@ Creates a scraper instance.
 | `retryPolicy` | `RetryPolicy` | `ExponentialBackoffRetry` | Custom retry policy for transient errors |
 | `onBlocked` | `(error: ScraperError) => Promise<void>` | — | Callback invoked before throwing on block/CAPTCHA errors |
 | `httpClient` | `HttpClient` | `AxiosHttpClient` | Custom HTTP client with cookie jar |
+| `sessionRecycle` | `{ afterRequests?: number; reactive?: boolean }` | `{ afterRequests: 5, reactive: true }` | Session degradation mitigation. `afterRequests`: recycle the cookie jar every N successful requests (0 = disabled). `reactive`: when a degraded page is detected (blank title + no price selectors), reset the session and retry once before raising `price_not_found`. Set `{ afterRequests: 0, reactive: false }` to restore pre-mitigation behaviour. |
 
 Returns an `AmazonCouponScraper` with the following methods:
 

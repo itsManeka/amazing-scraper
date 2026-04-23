@@ -4,10 +4,13 @@ import { HtmlParser } from '../../src/application/ports/HtmlParser';
 import { Logger } from '../../src/application/ports/Logger';
 import { RetryPolicy, RetryDecision } from '../../src/application/ports/RetryPolicy';
 import { UserAgentProvider } from '../../src/application/ports/UserAgentProvider';
+import { SessionRecycler } from '../../src/application/services/SessionRecycler';
 import { ProductPage } from '../../src/domain/entities';
 import { ScraperError } from '../../src/domain/errors';
 
 const TEST_UA = 'Mozilla/5.0 TestBrowser/1.0';
+
+const DEGRADED_HTML = '<html><head><title></title></head><body><div id="dp-container"></div></body></html>';
 
 const PRODUCT_PAGE: ProductPage = {
   asin: 'B0TEST',
@@ -73,6 +76,7 @@ function createMocks() {
 function createUseCase(
   mocks: ReturnType<typeof createMocks>,
   onBlocked?: (error: ScraperError) => Promise<void>,
+  sessionRecycler?: SessionRecycler,
 ) {
   const useCase = new FetchProduct(
     mocks.httpClient,
@@ -81,6 +85,7 @@ function createUseCase(
     mocks.userAgentProvider,
     mocks.retryPolicy,
     onBlocked,
+    sessionRecycler,
   );
   jest.spyOn(useCase as never, 'delay' as never).mockResolvedValue(undefined as never);
   return useCase;
@@ -456,6 +461,339 @@ describe('FetchProduct', () => {
           asin: 'B0TEST',
           url: 'https://www.amazon.com.br/dp/B0TEST',
         }),
+      );
+    });
+  });
+
+  describe('RG3 — UA per-request (T3)', () => {
+    it('calls userAgentProvider.get() once per execute() call', async () => {
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>product 1</html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      await useCase.execute('B0TEST1');
+      expect(mocks.userAgentProvider.get).toHaveBeenCalledTimes(1);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>product 2</html>'));
+      await useCase.execute('B0TEST2');
+      expect(mocks.userAgentProvider.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('uses different UAs for consecutive requests when provider returns different values', async () => {
+      const mocks = createMocks();
+      const ua1 = 'Mozilla/5.0 Browser1';
+      const ua2 = 'Mozilla/5.0 Browser2';
+
+      mocks.userAgentProvider.get.mockReturnValueOnce(ua1).mockReturnValueOnce(ua2);
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>product 1</html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      await useCase.execute('B0TEST1');
+      const firstCall = mocks.httpClient.get.mock.calls[0];
+      const firstHeaders = firstCall[1] as Record<string, string>;
+      expect(firstHeaders['user-agent']).toBe(ua1);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>product 2</html>'));
+      await useCase.execute('B0TEST2');
+      const secondCall = mocks.httpClient.get.mock.calls[1];
+      const secondHeaders = secondCall[1] as Record<string, string>;
+      expect(secondHeaders['user-agent']).toBe(ua2);
+    });
+  });
+
+  describe('T5 — Deteccao reativa de degrade + retry (reactive mode)', () => {
+    it('detects degraded page, resets session, retries with fresh UA, and succeeds', async () => {
+      const mocks = createMocks();
+      // Add resetSession to the mock
+      const resetSessionMock = jest.fn();
+      Object.defineProperty(mocks.httpClient, 'resetSession', {
+        value: resetSessionMock,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const sessionRecycler = new SessionRecycler(mocks.httpClient, 5, mocks.logger);
+      const useCase = createUseCase(mocks, undefined, sessionRecycler);
+
+      // First request returns degraded HTML
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      // Second request (after reset) returns healthy HTML
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html><head><title>Product</title></head><body><span id="productTitle">Test</span><span class="a-price"><span class="a-offscreen">R$ 99,90</span></span></body></html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result).toEqual(PRODUCT_PAGE);
+      // Should call httpClient.get twice: first degraded, then retry
+      expect(mocks.httpClient.get).toHaveBeenCalledTimes(2);
+      // resetSession should be called once (reactive reset)
+      expect(resetSessionMock).toHaveBeenCalledTimes(1);
+      // Should log degrade detection
+      expect(mocks.logger.warn).toHaveBeenCalledWith(
+        expect.stringMatching(/degrade/i),
+        expect.any(Object),
+      );
+      // userAgentProvider should be called twice (once per request)
+      expect(mocks.userAgentProvider.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('handles double-degrade: both requests degraded, resets once, parser processes degraded HTML', async () => {
+      const mocks = createMocks();
+      // Add resetSession to the mock
+      const resetSessionMock = jest.fn();
+      Object.defineProperty(mocks.httpClient, 'resetSession', {
+        value: resetSessionMock,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const sessionRecycler = new SessionRecycler(mocks.httpClient, 5, mocks.logger);
+      const useCase = createUseCase(mocks, undefined, sessionRecycler);
+
+      // Both requests return degraded HTML
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      // Parser returns price: null (indicating price extraction failed)
+      const degradedPage = { ...PRODUCT_PAGE, price: null };
+      mocks.htmlParser.extractProductInfo.mockReturnValue(degradedPage);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result.price).toBeNull();
+      // Should call httpClient.get twice (first + retry)
+      expect(mocks.httpClient.get).toHaveBeenCalledTimes(2);
+      // resetSession should be called once (only reactive, no second retry)
+      expect(resetSessionMock).toHaveBeenCalledTimes(1);
+      // Parser still runs on degraded HTML
+      expect(mocks.htmlParser.extractProductInfo).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry or reset when first request is healthy (no degrade detected)', async () => {
+      const mocks = createMocks();
+      const mockHttpClient = {
+        ...mocks.httpClient,
+        resetSession: jest.fn(),
+      };
+      const sessionRecycler = new SessionRecycler(mockHttpClient as never, 5, mocks.logger);
+      const useCase = createUseCase(mocks, undefined, sessionRecycler);
+
+      // Healthy HTML
+      mockHttpClient.get.mockResolvedValueOnce(ok('<html><head><title>Product</title></head><body><span id="productTitle">Test</span><span class="a-price"><span class="a-offscreen">R$ 99,90</span></span></body></html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result).toEqual(PRODUCT_PAGE);
+      // Should call httpClient.get only once (no retry)
+      expect(mockHttpClient.get).toHaveBeenCalledTimes(1);
+      // resetSession should NOT be called
+      expect(mockHttpClient.resetSession).not.toHaveBeenCalled();
+      // userAgentProvider called once
+      expect(mocks.userAgentProvider.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles httpClient.resetSession undefined gracefully (custom HttpClient) — FINDING 3: no retry without resetSession', async () => {
+      const mocks = createMocks();
+      // httpClient without resetSession method
+      const customHttpClient: HttpClient = {
+        get: mocks.httpClient.get,
+        post: mocks.httpClient.post,
+      };
+      const sessionRecycler = new SessionRecycler(customHttpClient, 5, mocks.logger);
+      const useCase = createUseCase(mocks, undefined, sessionRecycler);
+
+      // First request returns degraded HTML
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      const degradedPage = { ...PRODUCT_PAGE, price: null };
+      mocks.htmlParser.extractProductInfo.mockReturnValue(degradedPage);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result.price).toBeNull();
+      // FINDING 3: Should make only 1 request (NO retry without resetSession)
+      expect(mocks.httpClient.get).toHaveBeenCalledTimes(1);
+      // Should log warn about missing resetSession
+      expect(mocks.logger.warn).toHaveBeenCalledWith(
+        expect.stringMatching(/resetSession.*not available/i),
+        expect.any(Object),
+      );
+    });
+
+    it('logs warn message when degrade is detected', async () => {
+      const mocks = createMocks();
+      // Add resetSession to the mock
+      const resetSessionMock = jest.fn();
+      Object.defineProperty(mocks.httpClient, 'resetSession', {
+        value: resetSessionMock,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const sessionRecycler = new SessionRecycler(mocks.httpClient, 5, mocks.logger);
+      const useCase = createUseCase(mocks, undefined, sessionRecycler);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html><head><title>Product</title></head><body><span id="productTitle">Test</span><span class="a-price"><span class="a-offscreen">R$ 99,90</span></span></body></html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      await useCase.execute('B0TEST');
+
+      expect(mocks.logger.warn).toHaveBeenCalledWith(
+        'Page appears degraded — retrying with fresh session',
+        expect.objectContaining({ asin: 'B0TEST', url: 'https://www.amazon.com.br/dp/B0TEST' }),
+      );
+    });
+  });
+
+  describe('T5 — reactive=false (legacy mode)', () => {
+    it('does not detect degrade or retry when reactive=false', async () => {
+      const mocks = createMocks();
+      // Add resetSession to the mock
+      const resetSessionMock = jest.fn();
+      Object.defineProperty(mocks.httpClient, 'resetSession', {
+        value: resetSessionMock,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const sessionRecycler = new SessionRecycler(mocks.httpClient, 5, mocks.logger);
+      // Create use case with reactive=false
+      const useCase = new FetchProduct(
+        mocks.httpClient,
+        mocks.htmlParser,
+        mocks.logger,
+        mocks.userAgentProvider,
+        mocks.retryPolicy,
+        undefined,
+        sessionRecycler,
+        false, // reactive = false
+      );
+      jest.spyOn(useCase as never, 'delay' as never).mockResolvedValue(undefined as never);
+
+      // Degraded HTML
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      const degradedPage = { ...PRODUCT_PAGE, price: null };
+      mocks.htmlParser.extractProductInfo.mockReturnValue(degradedPage);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result.price).toBeNull();
+      // Should call httpClient.get only once (no retry)
+      expect(mocks.httpClient.get).toHaveBeenCalledTimes(1);
+      // resetSession should NOT be called
+      expect(resetSessionMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('FINDING 2 — assertNoCaptcha on retry response', () => {
+    it('throws blocked when retry response contains CAPTCHA (not degraded HTML)', async () => {
+      const mocks = createMocks();
+      const resetSessionMock = jest.fn();
+      Object.defineProperty(mocks.httpClient, 'resetSession', {
+        value: resetSessionMock,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const sessionRecycler = new SessionRecycler(mocks.httpClient, 5, mocks.logger);
+      const useCase = createUseCase(mocks, undefined, sessionRecycler);
+
+      // First request returns degraded HTML (missing prices)
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      // Second request (after reset) returns CAPTCHA
+      mocks.httpClient.get.mockResolvedValueOnce(
+        ok('<html>Type the characters you see in this image</html>'),
+      );
+
+      await expect(useCase.execute('B0TEST')).rejects.toMatchObject({
+        code: 'blocked',
+        context: expect.objectContaining({ reason: 'CAPTCHA detected' }),
+      });
+
+      // Should have made 2 requests (first degraded, then retry with CAPTCHA)
+      expect(mocks.httpClient.get).toHaveBeenCalledTimes(2);
+      // resetSession should have been called once
+      expect(resetSessionMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('FINDING 3 — Retry only when resetSession is available', () => {
+    it('does not retry when httpClient.resetSession is undefined, even with sessionRecycler', async () => {
+      const mocks = createMocks();
+      // No resetSession method on httpClient
+      const customHttpClient: HttpClient = {
+        get: mocks.httpClient.get,
+        post: mocks.httpClient.post,
+      };
+
+      const sessionRecycler = new SessionRecycler(customHttpClient, 5, mocks.logger);
+      // Create use case with custom http client (no resetSession)
+      const useCase = new FetchProduct(
+        customHttpClient,
+        mocks.htmlParser,
+        mocks.logger,
+        mocks.userAgentProvider,
+        mocks.retryPolicy,
+        undefined,
+        sessionRecycler,
+      );
+      jest.spyOn(useCase as never, 'delay' as never).mockResolvedValue(undefined as never);
+
+      // Degraded HTML
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      const degradedPage = { ...PRODUCT_PAGE, price: null };
+      mocks.htmlParser.extractProductInfo.mockReturnValue(degradedPage);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result.price).toBeNull();
+      // Should call httpClient.get only once (no retry because resetSession missing)
+      expect(mocks.httpClient.get).toHaveBeenCalledTimes(1);
+      // Should log warn about resetSession missing
+      expect(mocks.logger.warn).toHaveBeenCalledWith(
+        expect.stringMatching(/resetSession.*not available/i),
+        expect.any(Object),
+      );
+    });
+
+    it('logs warn when degrade detected but resetSession unavailable', async () => {
+      const mocks = createMocks();
+      // Custom HttpClient without resetSession
+      const customHttpClient: HttpClient = {
+        get: mocks.httpClient.get,
+        post: mocks.httpClient.post,
+      };
+
+      const sessionRecycler = new SessionRecycler(customHttpClient, 5, mocks.logger);
+      const useCase = new FetchProduct(
+        customHttpClient,
+        mocks.htmlParser,
+        mocks.logger,
+        mocks.userAgentProvider,
+        mocks.retryPolicy,
+        undefined,
+        sessionRecycler,
+      );
+      jest.spyOn(useCase as never, 'delay' as never).mockResolvedValue(undefined as never);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      const degradedPage = { ...PRODUCT_PAGE, price: null };
+      mocks.htmlParser.extractProductInfo.mockReturnValue(degradedPage);
+
+      await useCase.execute('B0TEST');
+
+      expect(mocks.logger.warn).toHaveBeenCalledWith(
+        expect.stringMatching(/resetSession.*not available/i),
+        expect.objectContaining({ reason: 'HttpClient must implement resetSession for reactive retry' }),
       );
     });
   });

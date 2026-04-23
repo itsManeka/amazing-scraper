@@ -4,6 +4,7 @@ import { HtmlParser } from '../../src/application/ports/HtmlParser';
 import { Logger } from '../../src/application/ports/Logger';
 import { RetryPolicy, RetryDecision } from '../../src/application/ports/RetryPolicy';
 import { UserAgentProvider } from '../../src/application/ports/UserAgentProvider';
+import { SessionRecycler } from '../../src/application/services/SessionRecycler';
 import { IndividualCouponInfo, CouponMetadata } from '../../src/domain/entities';
 import { FetchIndividualCouponTerms } from '../../src/application/use-cases/FetchIndividualCouponTerms';
 import { ScraperError } from '../../src/domain/errors';
@@ -131,6 +132,7 @@ function createUseCase(
   opts?: {
     paginationLimits?: { maxProducts?: number; maxPages?: number };
     onBlocked?: (error: ScraperError) => Promise<void>;
+    sessionRecycler?: SessionRecycler;
   },
 ) {
   const useCase = new ExtractApplicableCouponProducts(
@@ -143,6 +145,7 @@ function createUseCase(
     opts?.onBlocked,
     { min: 0, max: 0 },
     opts?.paginationLimits,
+    opts?.sessionRecycler,
   );
   jest.spyOn(useCase as never, 'delay' as never).mockResolvedValue(undefined as never);
   return useCase;
@@ -1081,6 +1084,112 @@ describe('ExtractApplicableCouponProducts', () => {
           context: expect.objectContaining({ reason: 'CAPTCHA detected' }),
         }),
       );
+    });
+
+    it('RG3: calls userAgentProvider.get() once per request (GET + POST)', async () => {
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get
+        .mockResolvedValueOnce(ok('<html>coupon page</html>'));
+      mocks.htmlParser.extractCsrfToken.mockReturnValue('TOKEN');
+      mocks.htmlParser.extractIndividualCouponExpiration.mockReturnValue(null);
+      mocks.httpClient.post
+        .mockResolvedValueOnce(productListResponse([makeProductItem('B001', 1)]))
+        .mockResolvedValueOnce(emptyProductList());
+
+      await useCase.execute(makeCoupon04Info(), 'B0TEST');
+
+      // Once for GET (coupon page) + 2x for POST pagination requests
+      expect(mocks.userAgentProvider.get).toHaveBeenCalledTimes(3);
+    });
+
+    it('RG3: uses different UAs for sequential requests when provider rotates', async () => {
+      const mocks = createMocks();
+      const ua1 = 'Mozilla/5.0 Browser1';
+      const ua2 = 'Mozilla/5.0 Browser2';
+      const ua3 = 'Mozilla/5.0 Browser3';
+
+      mocks.userAgentProvider.get
+        .mockReturnValueOnce(ua1)
+        .mockReturnValueOnce(ua2)
+        .mockReturnValueOnce(ua3);
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get
+        .mockResolvedValueOnce(ok('<html>coupon page</html>'));
+      mocks.htmlParser.extractCsrfToken.mockReturnValue('TOKEN');
+      mocks.htmlParser.extractIndividualCouponExpiration.mockReturnValue(null);
+      mocks.httpClient.post
+        .mockResolvedValueOnce(productListResponse([makeProductItem('B001', 1)]))
+        .mockResolvedValueOnce(emptyProductList());
+
+      await useCase.execute(makeCoupon04Info(), 'B0TEST');
+
+      const getHeaders = mocks.httpClient.get.mock.calls[0][1] as Record<string, string>;
+      expect(getHeaders['user-agent']).toBe(ua1);
+
+      const postHeaders1 = mocks.httpClient.post.mock.calls[0][3] as Record<string, string>;
+      expect(postHeaders1['user-agent']).toBe(ua2);
+
+      const postHeaders2 = mocks.httpClient.post.mock.calls[1][3] as Record<string, string>;
+      expect(postHeaders2['user-agent']).toBe(ua3);
+    });
+  });
+
+  describe('FINDING 4 — com SessionRecycler wired', () => {
+    it('calls recordRequest after each GET and POST request', async () => {
+      const mocks = createMocks();
+      const sessionRecycler = new SessionRecycler(mocks.httpClient, 5, mocks.logger);
+      const recordRequestSpy = jest.spyOn(sessionRecycler, 'recordRequest');
+      const useCase = createUseCase(mocks, {
+        sessionRecycler,
+        paginationLimits: { maxProducts: 10, maxPages: 5 },
+      });
+
+      const coupon = makeCoupon04Info();
+      const sourceAsin = 'B0SOURCE';
+
+      // GET coupon page + CSRF token extraction
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>coupon page</html>'));
+
+      // POST for applicable products pagination
+      mocks.httpClient.post
+        .mockResolvedValueOnce(productListResponse([
+          makeProductItem('B001', 1),
+        ]))
+        .mockResolvedValueOnce(emptyProductList());
+
+      mocks.htmlParser.extractCsrfToken.mockReturnValue('TOKEN');
+      mocks.fetchIndividualCouponTerms.execute.mockResolvedValue('some terms html');
+
+      const result = await useCase.execute(coupon, sourceAsin);
+
+      expect(result.promotionId).toBe(coupon.promotionId);
+      expect(result.asins).toContain('B001');
+      // recordRequest called: 1 GET + 2 POST = 3 times total
+      expect(recordRequestSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it('behavior identical to legacy when sessionRecycler not passed', async () => {
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks, {
+        sessionRecycler: undefined,
+        paginationLimits: { maxProducts: 10, maxPages: 5 },
+      });
+
+      const coupon = makeCoupon03Info();
+      const sourceAsin = 'B0SOURCE';
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>coupon page</html>'));
+      mocks.htmlParser.extractCsrfToken.mockReturnValue('TOKEN');
+      mocks.fetchIndividualCouponTerms.execute.mockResolvedValue('some terms html');
+
+      const result = await useCase.execute(coupon, sourceAsin);
+
+      expect(result.promotionId).toBe(coupon.promotionId);
+      // Coupon-03 without participating products URL returns sourceAsin only
+      expect(result.asins).toEqual([sourceAsin]);
     });
   });
 });
