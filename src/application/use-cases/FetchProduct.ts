@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { ProductPage } from '../../domain/entities';
 import { ScraperError } from '../../domain/errors';
 import { isDegradedProductPage } from '../../infrastructure/parsers/isDegradedProductPage';
@@ -81,6 +83,10 @@ export class FetchProduct {
     this.sessionRecycler?.recordRequest();
 
     const page = this.htmlParser.extractProductInfo(responseFinal.data, asin, url, this.logger);
+
+    // Forensic degrade capture (opt-in via env var)
+    this.captureForensicDegrade(asin, url, responseFinal.data, page);
+
     this.logger.info('Product page fetched', {
       asin,
       title: page.title,
@@ -162,5 +168,63 @@ export class FetchProduct {
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private captureForensicDegrade(asin: string, url: string, html: string, page: ProductPage): void {
+    const forensicDir = process.env.FORENSIC_DEGRADE_CAPTURE_DIR;
+
+    // DIAGNOSTIC: always log when env is set, to verify env reaches the process
+    if (forensicDir) {
+      this.logger.warn('forensic debug', {
+        asin,
+        dirSet: forensicDir,
+        title: page.title,
+        titleLen: page.title.length,
+        price: page.price,
+        willCapture: page.title === '' && page.price === null,
+      });
+    }
+
+    // Broadened capture condition: price === null is sufficient (title may have whitespace)
+    if (!forensicDir || page.price !== null) {
+      return;
+    }
+
+    try {
+      fs.mkdirSync(forensicDir, { recursive: true });
+
+      const timestamp = new Date().toISOString().replace(/:/g, '-').slice(0, -5);
+      const baseFilename = `degrade-${asin}-${timestamp}`;
+
+      // Save raw HTML
+      const htmlPath = path.join(forensicDir, `${baseFilename}.html`);
+      fs.writeFileSync(htmlPath, html, 'utf8');
+
+      // Save metadata JSON
+      const htmlSample = html.slice(0, 500);
+      const htmlMid = html.length > 1000 ? html.slice(html.length / 2 - 250, html.length / 2 + 250) : '';
+      const htmlEnd = html.slice(-500);
+
+      const metadata = {
+        asin,
+        url,
+        timestamp: new Date().toISOString(),
+        responseLength: html.length,
+        isDegradedResult: isDegradedProductPage(html),
+        htmlStartSample: htmlSample,
+        htmlMidSample: htmlMid,
+        htmlEndSample: htmlEnd,
+      };
+
+      const jsonPath = path.join(forensicDir, `${baseFilename}.json`);
+      fs.writeFileSync(jsonPath, JSON.stringify(metadata, null, 2), 'utf8');
+
+      this.logger.warn('Forensic degrade capture saved', { asin, htmlPath, jsonPath });
+    } catch (err) {
+      this.logger.warn('Forensic capture failed', {
+        asin,
+        error: String(err),
+      });
+    }
   }
 }

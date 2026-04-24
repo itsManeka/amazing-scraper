@@ -1,3 +1,6 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { FetchProduct } from '../../src/application/use-cases/FetchProduct';
 import { HttpClient, HttpResponse } from '../../src/application/ports/HttpClient';
 import { HtmlParser } from '../../src/application/ports/HtmlParser';
@@ -795,6 +798,144 @@ describe('FetchProduct', () => {
         expect.stringMatching(/resetSession.*not available/i),
         expect.objectContaining({ reason: 'HttpClient must implement resetSession for reactive retry' }),
       );
+    });
+  });
+
+  describe('T1 — Forensic degrade capture (opt-in via env var)', () => {
+    beforeEach(() => {
+      delete process.env.FORENSIC_DEGRADE_CAPTURE_DIR;
+    });
+
+    afterEach(() => {
+      delete process.env.FORENSIC_DEGRADE_CAPTURE_DIR;
+    });
+
+    it('(a) env absent + parse empty → does not create file', async () => {
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks);
+
+      const writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation();
+      const mkdirSpy = jest.spyOn(fs, 'mkdirSync').mockImplementation();
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok(DEGRADED_HTML));
+      const emptyPage = { ...PRODUCT_PAGE, title: '', price: null };
+      mocks.htmlParser.extractProductInfo.mockReturnValue(emptyPage);
+
+      const result = await useCase.execute('B0TEST');
+
+      expect(result.title).toBe('');
+      expect(result.price).toBeNull();
+      // fs operations should never be called
+      expect(writeSpy).not.toHaveBeenCalled();
+      expect(mkdirSpy).not.toHaveBeenCalled();
+
+      writeSpy.mockRestore();
+      mkdirSpy.mockRestore();
+    });
+
+    it('(b) env set + parse empty → creates 2 files and logs warn', async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forensic-test-'));
+      process.env.FORENSIC_DEGRADE_CAPTURE_DIR = tmpDir;
+
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks);
+
+      const testHtml = '<html><body>degraded page</body></html>';
+      mocks.httpClient.get.mockResolvedValueOnce(ok(testHtml));
+      const emptyPage = { ...PRODUCT_PAGE, title: '', price: null };
+      mocks.htmlParser.extractProductInfo.mockReturnValue(emptyPage);
+
+      const result = await useCase.execute('B0DEGRADE');
+
+      expect(result.title).toBe('');
+      expect(result.price).toBeNull();
+
+      // Check files were created
+      const files = fs.readdirSync(tmpDir);
+      const htmlFiles = files.filter((f) => f.endsWith('.html'));
+      const jsonFiles = files.filter((f) => f.endsWith('.json'));
+
+      expect(htmlFiles.length).toBe(1);
+      expect(jsonFiles.length).toBe(1);
+
+      // Check HTML content
+      const htmlContent = fs.readFileSync(path.join(tmpDir, htmlFiles[0]), 'utf8');
+      expect(htmlContent).toBe(testHtml);
+
+      // Check JSON structure
+      const jsonContent = fs.readFileSync(path.join(tmpDir, jsonFiles[0]), 'utf8');
+      const metadata = JSON.parse(jsonContent);
+      expect(metadata).toHaveProperty('asin', 'B0DEGRADE');
+      expect(metadata).toHaveProperty('url', 'https://www.amazon.com.br/dp/B0DEGRADE');
+      expect(metadata).toHaveProperty('timestamp');
+      expect(metadata).toHaveProperty('responseLength');
+      expect(metadata).toHaveProperty('isDegradedResult');
+      expect(metadata).toHaveProperty('htmlStartSample');
+
+      // Check logger.warn was called
+      expect(mocks.logger.warn).toHaveBeenCalledWith(
+        'Forensic degrade capture saved',
+        expect.objectContaining({ asin: 'B0DEGRADE' }),
+      );
+
+      // Cleanup
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('(c) env set + parse OK (title and price filled) → does not create file', async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forensic-test-'));
+      process.env.FORENSIC_DEGRADE_CAPTURE_DIR = tmpDir;
+
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>good product</html>'));
+      mocks.htmlParser.extractProductInfo.mockReturnValue(PRODUCT_PAGE);
+
+      const result = await useCase.execute('B0GOOD');
+
+      expect(result.title).toBe('Produto Teste');
+      expect(result.price).toBe('R$ 99,90');
+
+      // No files should be created
+      const files = fs.readdirSync(tmpDir);
+      expect(files.length).toBe(0);
+
+      // Cleanup
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('(d) env set + fs.writeFileSync throws → logs warn and returns page normally', async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forensic-test-'));
+      process.env.FORENSIC_DEGRADE_CAPTURE_DIR = tmpDir;
+
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks);
+
+      // Mock fs.mkdirSync to succeed but fs.writeFileSync to throw
+      jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {
+        throw new Error('Simulated write error');
+      });
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>degraded</html>'));
+      const emptyPage = { ...PRODUCT_PAGE, title: '', price: null };
+      mocks.htmlParser.extractProductInfo.mockReturnValue(emptyPage);
+
+      const result = await useCase.execute('B0ERROR');
+
+      // Should still return the page normally
+      expect(result.title).toBe('');
+      expect(result.price).toBeNull();
+
+      // Should log warn about capture failure
+      expect(mocks.logger.warn).toHaveBeenCalledWith(
+        'Forensic capture failed',
+        expect.objectContaining({ asin: 'B0ERROR' }),
+      );
+
+      // Restore
+      jest.restoreAllMocks();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     });
   });
 });
