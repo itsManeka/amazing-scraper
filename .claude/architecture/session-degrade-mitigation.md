@@ -10,12 +10,13 @@ Mitigação híbrida ativa por padrão: reciclagem preventiva a cada N requests 
 
 ### Detecção de degrade (`isDegradedProductPage(html): boolean`)
 
-Retorna `true` apenas quando os **três** sinais estão presentes simultaneamente:
-1. `<title>` ausente, vazio ou contendo apenas `"Amazon.com.br"` genérico
-2. `#productTitle` ausente ou vazio
-3. **Todos** os price selectors ausentes: `#priceblock_ourprice`, `#priceblock_dealprice`, `#priceblock_saleprice`, `.a-price .a-offscreen`, `span.a-price[data-a-size=xl] .a-offscreen`, `#corePrice_feature_div .a-offscreen`, **e** `[data-csa-c-owner="PromotionsDiscovery"]`
+Retorna `true` quando os **dois** sinais estão presentes simultaneamente:
+1. `#productTitle` ausente ou vazio
+2. **Todos** os price selectors ausentes: `#priceblock_ourprice`, `#priceblock_dealprice`, `#priceblock_saleprice`, `.a-price .a-offscreen`, `span.a-price[data-a-size=xl] .a-offscreen`, `#corePrice_feature_div .a-offscreen`, **e** `[data-csa-c-owner="PromotionsDiscovery"]`
 
-AND tripla é obrigatória para evitar falso-positivo em produtos sem estoque (title preenchido + productTitle preenchido mas sem preço).
+A condição sobre `<title>` foi removida: páginas anti-bot da Amazon servem `<title>` **preenchido** com o nome real do produto ("AUXOM Potes Herméticos... | Amazon.com.br") enquanto omitem `#productTitle` e todos os price selectors — portanto `<title>` não é discriminador. Validado empiricamente em 5 HTMLs reais capturados.
+
+Falso-positivo em produto out-of-stock não ocorre porque páginas reais (mesmo sem estoque) sempre têm `#productTitle` preenchido.
 
 ### SessionRecycler (reciclagem preventiva)
 

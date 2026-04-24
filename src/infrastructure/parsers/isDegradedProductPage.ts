@@ -3,14 +3,17 @@ import * as cheerio from 'cheerio';
 /**
  * Detects if an Amazon product page HTML is degraded (missing critical data).
  *
- * A page is considered degraded when ALL THREE conditions are true (AND logic):
- * 1. Title is missing, empty, or contains only generic "Amazon.com.br" text
- * 2. Product title (#productTitle) is missing or empty
- * 3. ALL price selectors are absent from the page
+ * A page is considered degraded when BOTH conditions are true (AND logic):
+ * 1. Product title (#productTitle) is missing or empty
+ * 2. ALL price selectors are absent from the page
  *
- * This heuristic avoids false positives for legitimate out-of-stock pages,
- * which may have title + productTitle + no prices, but should return false
- * (only out-of-stock status, not a session degradation).
+ * Note: The <title> tag is NOT checked because anti-bot pages (CloudFront blocks)
+ * can have a filled <title> with the actual product name but are still degraded
+ * (missing #productTitle and all price elements). This heuristic avoids false
+ * negatives by focusing on structural absence of critical product data.
+ *
+ * This still avoids false positives for legitimate out-of-stock pages,
+ * which have productTitle + no prices (only one condition met).
  *
  * @param html - The raw HTML string of the product page
  * @returns true if the page shows signs of session degradation, false otherwise
@@ -18,19 +21,11 @@ import * as cheerio from 'cheerio';
 export function isDegradedProductPage(html: string): boolean {
   const $ = cheerio.load(html);
 
-  // Condition 1: Check if <title> is absent, empty, or generic
-  const titleText = $('title').text().trim();
-  const titleDegraded =
-    !titleText ||
-    titleText.length === 0 ||
-    titleText === 'Amazon.com.br' ||
-    /^Amazon\.com\.br\s*$/i.test(titleText);
-
-  // Condition 2: Check if #productTitle is absent or empty
+  // Condition 1: Check if #productTitle is absent or empty
   const productTitleText = $('#productTitle').text().trim();
-  const productTitleDegraded = !productTitleText || productTitleText.length === 0;
+  const productTitleEmpty = !productTitleText || productTitleText.length === 0;
 
-  // Condition 3: Check if ALL price selectors are absent
+  // Condition 2: Check if ALL price selectors are absent
   // Price sources include traditional price blocks AND PromotionsDiscovery container
   const priceSelectors = [
     '#priceblock_ourprice',
@@ -50,6 +45,6 @@ export function isDegradedProductPage(html: string): boolean {
     }
   }
 
-  // Triple AND: all three conditions must be true
-  return titleDegraded && productTitleDegraded && allPriceSelectorsAbsent;
+  // Double AND: both conditions must be true
+  return productTitleEmpty && allPriceSelectorsAbsent;
 }
