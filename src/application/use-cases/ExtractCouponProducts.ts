@@ -7,6 +7,7 @@ import { HtmlParser } from '../ports/HtmlParser';
 import { Logger } from '../ports/Logger';
 import { RetryPolicy } from '../ports/RetryPolicy';
 import { UserAgentProvider } from '../ports/UserAgentProvider';
+import { SessionRecycler } from '../services/SessionRecycler';
 
 export interface DelayConfig {
   min: number;
@@ -53,22 +54,21 @@ export class ExtractCouponProducts {
   private readonly delayConfig: DelayConfig;
   private readonly maxProducts: number;
   private readonly maxPages: number;
-  private readonly userAgent: string;
 
   constructor(
     private readonly httpClient: HttpClient,
     private readonly htmlParser: HtmlParser,
     private readonly logger: Logger,
-    userAgentProvider: UserAgentProvider,
+    private readonly userAgentProvider: UserAgentProvider,
     private readonly retryPolicy: RetryPolicy,
     private readonly onBlocked?: (error: ScraperError) => Promise<void>,
     delayConfig?: DelayConfig,
     paginationLimits?: PaginationLimits,
+    private readonly sessionRecycler?: SessionRecycler,
   ) {
     this.delayConfig = delayConfig ?? { min: 1000, max: 2000 };
     this.maxProducts = paginationLimits?.maxProducts ?? 1_000;
     this.maxPages = paginationLimits?.maxPages ?? 500;
-    this.userAgent = userAgentProvider.get();
   }
 
   /**
@@ -100,8 +100,12 @@ export class ExtractCouponProducts {
     couponPageUrl: string,
     referer: string,
   ): Promise<{ csrfToken: string; couponReferer: string; metadata: CouponMetadata }> {
-    const headers = buildGetHeaders(this.userAgent, referer);
+    const userAgent = this.userAgentProvider.get();
+    const headers = buildGetHeaders(userAgent, referer);
     const response = await this.getWithRetry(couponPageUrl, headers);
+
+    // Record the request for preventive session recycling
+    this.sessionRecycler?.recordRequest();
 
     await this.assertNoCaptcha(response);
 
@@ -193,7 +197,8 @@ export class ExtractCouponProducts {
       }
 
       const payload = this.buildProductListPayload(couponInfo, currentCsrfToken, sortId, isFirstPageLoad);
-      const headers = buildPostHeaders(this.userAgent, currentCouponReferer);
+      const userAgent = this.userAgentProvider.get();
+      const headers = buildPostHeaders(userAgent, currentCouponReferer);
 
       await this.randomDelay();
       let response: HttpResponse;
@@ -221,6 +226,9 @@ export class ExtractCouponProducts {
       }
 
       pageCount++;
+
+      // Record the request for preventive session recycling
+      this.sessionRecycler?.recordRequest();
 
       await this.assertNoCaptcha(response);
 

@@ -7,6 +7,7 @@ import { HtmlParser } from '../ports/HtmlParser';
 import { Logger } from '../ports/Logger';
 import { RetryPolicy } from '../ports/RetryPolicy';
 import { UserAgentProvider } from '../ports/UserAgentProvider';
+import { SessionRecycler } from '../services/SessionRecycler';
 import { DelayConfig } from './ExtractCouponProducts';
 
 export interface FetchPreSalesOptions {
@@ -25,19 +26,18 @@ const DEFAULT_LIMIT = 5;
  */
 export class FetchPreSales {
   private readonly delayConfig: DelayConfig;
-  private readonly userAgent: string;
 
   constructor(
     private readonly httpClient: HttpClient,
     private readonly htmlParser: HtmlParser,
     private readonly logger: Logger,
-    userAgentProvider: UserAgentProvider,
+    private readonly userAgentProvider: UserAgentProvider,
     private readonly retryPolicy: RetryPolicy,
     private readonly onBlocked?: (error: ScraperError) => Promise<void>,
     delayConfig?: DelayConfig,
+    private readonly sessionRecycler?: SessionRecycler,
   ) {
     this.delayConfig = delayConfig ?? { min: 1000, max: 2000 };
-    this.userAgent = userAgentProvider.get();
   }
 
   /**
@@ -61,9 +61,13 @@ export class FetchPreSales {
       const url = page === 1 ? PRE_SALES_URL : `${PRE_SALES_URL}&page=${page}`;
       this.logger.info('Fetching search page', { page, url });
 
-      const headers = buildGetHeaders(this.userAgent);
+      const userAgent = this.userAgentProvider.get();
+      const headers = buildGetHeaders(userAgent);
       const response = await this.fetchWithRetry(url, headers);
       await this.assertNoCaptcha(response, url);
+
+      // Record the request for preventive session recycling
+      this.sessionRecycler?.recordRequest();
 
       const asins = this.htmlParser.extractSearchResultAsins(response.data);
 

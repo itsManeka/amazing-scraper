@@ -4,6 +4,7 @@ import { HtmlParser } from '../../src/application/ports/HtmlParser';
 import { Logger } from '../../src/application/ports/Logger';
 import { RetryPolicy, RetryDecision } from '../../src/application/ports/RetryPolicy';
 import { UserAgentProvider } from '../../src/application/ports/UserAgentProvider';
+import { SessionRecycler } from '../../src/application/services/SessionRecycler';
 import { ScraperError } from '../../src/domain/errors';
 import { PRE_SALES_URL } from '../../src/infrastructure/http/amazonConstants';
 
@@ -51,6 +52,7 @@ function createMocks() {
 function createUseCase(
   mocks: ReturnType<typeof createMocks>,
   onBlocked?: (error: ScraperError) => Promise<void>,
+  sessionRecycler?: SessionRecycler,
 ) {
   const useCase = new FetchPreSales(
     mocks.httpClient,
@@ -60,6 +62,7 @@ function createUseCase(
     mocks.retryPolicy,
     onBlocked,
     { min: 100, max: 100 },
+    sessionRecycler,
   );
   jest.spyOn(useCase as never, 'delay' as never).mockResolvedValue(undefined as never);
   return useCase;
@@ -506,6 +509,84 @@ describe('FetchPreSales', () => {
 
       expect(result.asins).toHaveLength(5);
       expect(mocks.httpClient.get).toHaveBeenCalledTimes(5);
+    });
+
+    it('RG3: calls userAgentProvider.get() per page request', async () => {
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks);
+
+      mocks.htmlParser.extractSearchResultAsins.mockReturnValue(['B001', 'B002', 'B003']);
+      mocks.htmlParser.hasNextSearchPage.mockReturnValue(false);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>page1</html>'));
+
+      await useCase.execute({ limit: 1 });
+
+      expect(mocks.userAgentProvider.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('RG3: uses different UAs for consecutive page requests', async () => {
+      const mocks = createMocks();
+      const ua1 = 'Mozilla/5.0 Browser1';
+      const ua2 = 'Mozilla/5.0 Browser2';
+
+      mocks.userAgentProvider.get.mockReturnValueOnce(ua1).mockReturnValueOnce(ua2);
+      const useCase = createUseCase(mocks);
+
+      mocks.htmlParser.extractSearchResultAsins.mockReturnValue(['B001']);
+      mocks.htmlParser.hasNextSearchPage.mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>page1</html>'));
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>page2</html>'));
+
+      await useCase.execute({ limit: 2 });
+
+      const firstHeaders = mocks.httpClient.get.mock.calls[0][1] as Record<string, string>;
+      expect(firstHeaders['user-agent']).toBe(ua1);
+
+      const secondHeaders = mocks.httpClient.get.mock.calls[1][1] as Record<string, string>;
+      expect(secondHeaders['user-agent']).toBe(ua2);
+    });
+  });
+
+  describe('FINDING 4 — com SessionRecycler wired', () => {
+    it('calls recordRequest after each successful page fetch', async () => {
+      const mocks = createMocks();
+      const sessionRecycler = new SessionRecycler(mocks.httpClient, 5, mocks.logger);
+      const recordRequestSpy = jest.spyOn(sessionRecycler, 'recordRequest');
+      const useCase = createUseCase(mocks, undefined, sessionRecycler);
+
+      mocks.httpClient.get
+        .mockResolvedValueOnce(ok('<html>page1</html>'))
+        .mockResolvedValueOnce(ok('<html>page2</html>'));
+
+      mocks.htmlParser.extractSearchResultAsins
+        .mockReturnValueOnce(['B0A', 'B0B'])
+        .mockReturnValueOnce(['B0C']);
+
+      mocks.htmlParser.hasNextSearchPage
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(false);
+
+      const result = await useCase.execute({ limit: 2 });
+
+      expect(result.asins).toEqual(['B0A', 'B0B', 'B0C']);
+      // recordRequest should be called once per page (2 pages)
+      expect(recordRequestSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('behavior identical to legacy when sessionRecycler not passed', async () => {
+      const mocks = createMocks();
+      const useCase = createUseCase(mocks, undefined, undefined);
+
+      mocks.httpClient.get.mockResolvedValueOnce(ok('<html>page1</html>'));
+      mocks.htmlParser.extractSearchResultAsins.mockReturnValueOnce(['B0A']);
+      mocks.htmlParser.hasNextSearchPage.mockReturnValueOnce(false);
+
+      const result = await useCase.execute({ limit: 1 });
+
+      expect(result.asins).toEqual(['B0A']);
+      expect(mocks.httpClient.get).toHaveBeenCalledTimes(1);
     });
   });
 });

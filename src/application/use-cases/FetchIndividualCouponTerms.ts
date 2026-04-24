@@ -25,16 +25,12 @@ const AMAZON_HOSTNAME = 'www.amazon.com.br';
  * field downstream is optional and a missing value is acceptable.
  */
 export class FetchIndividualCouponTerms {
-  private readonly userAgent: string;
-
   constructor(
     private readonly httpClient: HttpClient,
     private readonly htmlParser: HtmlParser,
     private readonly logger: Logger,
-    userAgentProvider: UserAgentProvider,
-  ) {
-    this.userAgent = userAgentProvider.get();
-  }
+    private readonly userAgentProvider: UserAgentProvider,
+  ) {}
 
   async execute(termsUrl: string): Promise<string | null> {
     const fullUrl = this.resolveAndValidateUrl(termsUrl);
@@ -44,9 +40,10 @@ export class FetchIndividualCouponTerms {
     }
 
     try {
+      const userAgent = this.userAgentProvider.get();
       const response = await this.httpClient.get(
         fullUrl,
-        buildGetHeaders(this.userAgent),
+        buildGetHeaders(userAgent),
         { allowedRedirectHosts: [AMAZON_HOSTNAME] },
       );
       if (response.status !== 200) {

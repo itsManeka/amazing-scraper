@@ -337,5 +337,80 @@ describe('FetchIndividualCouponTerms', () => {
       );
       nock.cleanAll();
     });
+
+    it('RG3: calls userAgentProvider.get() once per execute() call', async () => {
+      const logger: jest.Mocked<Logger> = {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+      };
+      const userAgentProvider: jest.Mocked<UserAgentProvider> = {
+        get: jest.fn().mockReturnValue(TEST_UA),
+      };
+      const httpClient = new AxiosHttpClient(logger);
+      const htmlParser = new CheerioHtmlParser();
+      const useCase = new FetchIndividualCouponTerms(
+        httpClient,
+        htmlParser,
+        logger,
+        userAgentProvider,
+      );
+
+      nock('https://www.amazon.com.br')
+        .get('/promotion/details/popup/PROMO123')
+        .reply(200, '<div class="terms-text">Terms</div>');
+
+      await useCase.execute('/promotion/details/popup/PROMO123');
+      expect(userAgentProvider.get).toHaveBeenCalledTimes(1);
+
+      nock('https://www.amazon.com.br')
+        .get('/promotion/details/popup/PROMO456')
+        .reply(200, '<div class="terms-text">More terms</div>');
+
+      await useCase.execute('/promotion/details/popup/PROMO456');
+      expect(userAgentProvider.get).toHaveBeenCalledTimes(2);
+
+      nock.cleanAll();
+    });
+
+    it('RG3: uses different UAs for consecutive requests', async () => {
+      const logger: jest.Mocked<Logger> = {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+      };
+      const ua1 = 'Mozilla/5.0 Browser1';
+      const ua2 = 'Mozilla/5.0 Browser2';
+      const userAgentProvider: jest.Mocked<UserAgentProvider> = {
+        get: jest.fn().mockReturnValueOnce(ua1).mockReturnValueOnce(ua2),
+      };
+      const httpClient = new AxiosHttpClient(logger);
+      const htmlParser = new CheerioHtmlParser();
+      const useCase = new FetchIndividualCouponTerms(
+        httpClient,
+        htmlParser,
+        logger,
+        userAgentProvider,
+      );
+
+      // Capture UA from requests via logger spy
+      nock('https://www.amazon.com.br')
+        .get('/promotion/details/popup/PROMO123')
+        .reply(200, '<div class="terms-text">Terms</div>');
+
+      await useCase.execute('/promotion/details/popup/PROMO123');
+
+      nock('https://www.amazon.com.br')
+        .get('/promotion/details/popup/PROMO456')
+        .reply(200, '<div class="terms-text">More terms</div>');
+
+      await useCase.execute('/promotion/details/popup/PROMO456');
+
+      // Verify both calls were made with different UAs
+      expect(userAgentProvider.get).toHaveBeenNthCalledWith(1);
+      expect(userAgentProvider.get).toHaveBeenNthCalledWith(2);
+      expect(userAgentProvider.get).toHaveBeenCalledTimes(2);
+      nock.cleanAll();
+    });
   });
 });

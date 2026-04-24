@@ -2,6 +2,7 @@ export { Product, CouponInfo, CouponMetadata, CouponResult, ExtractCouponProduct
 export { ScraperError, ScraperErrorCode, ScraperErrorOptions } from './domain/errors';
 export { toAmazonProduct, parseAmazonPrice } from './domain/mappers/toAmazonProduct';
 export { normalizeAmazonImageUrl } from './infrastructure/parsers/CheerioHtmlParser';
+export { isDegradedProductPage } from './infrastructure/parsers/isDegradedProductPage';
 export { HttpClient, HttpGetOptions, HttpResponse } from './application/ports/HttpClient';
 export { Logger } from './application/ports/Logger';
 export { RetryPolicy, RetryContext, RetryDecision, RetryErrorType } from './application/ports/RetryPolicy';
@@ -27,6 +28,7 @@ import { Logger } from './application/ports/Logger';
 import { ScraperError } from './domain/errors';
 import { CouponInfo, CouponResult, FetchPreSalesResult, ProductPage, IndividualCouponInfo } from './domain/entities';
 import { FetchPreSalesOptions } from './application/use-cases/FetchPreSales';
+import { SessionRecycler } from './application/services/SessionRecycler';
 
 /**
  * Configuration options for the scraper factory.
@@ -46,6 +48,40 @@ export interface ScraperOptions {
   onBlocked?: (error: ScraperError) => Promise<void>;
   /** Custom HTTP client (default: AxiosHttpClient with cookie jar) */
   httpClient?: HttpClient;
+  /**
+   * Session recycling configuration for preventing session degradation over multiple requests.
+   * Default behavior includes preventive recycling (every 5 requests) and reactive degrade detection.
+   *
+   * @example
+   * // Enable with defaults (preventive: every 5 requests, reactive: true)
+   * const scraper = createScraper({ sessionRecycle: {} });
+   *
+   * // Custom preventive interval (recycle every 10 requests)
+   * const scraper = createScraper({ sessionRecycle: { afterRequests: 10 } });
+   *
+   * // Disable reactive detection, keep preventive recycling
+   * const scraper = createScraper({ sessionRecycle: { reactive: false } });
+   *
+   * // Disable all recycling (legacy mode)
+   * const scraper = createScraper({ sessionRecycle: { afterRequests: 0, reactive: false } });
+   *
+   * // Or omit sessionRecycle entirely for defaults (recommended)
+   * const scraper = createScraper();
+   */
+  sessionRecycle?: {
+    /**
+     * Recycle session (reset cookies, create new jar) after this many successful requests.
+     * Default: 5. Set to 0 to disable preventive recycling.
+     */
+    afterRequests?: number;
+    /**
+     * Enable reactive degrade detection on FetchProduct.
+     * When enabled, if a product page appears degraded (200 OK but missing critical data),
+     * the session is automatically reset and the request retried once.
+     * Default: true. Set to false to disable.
+     */
+    reactive?: boolean;
+  };
 }
 
 /**
@@ -135,16 +171,29 @@ export function createScraper(options?: ScraperOptions): AmazonCouponScraper {
   const retryPolicy = options?.retryPolicy ?? new ExponentialBackoffRetry();
   const onBlocked = options?.onBlocked;
 
+  // T6: Resolve session recycling options with defaults
+  const sessionRecycleConfig = options?.sessionRecycle ?? {};
+  const afterRequests = sessionRecycleConfig.afterRequests ?? 5; // Default: 5 requests
+  const reactive = sessionRecycleConfig.reactive ?? true; // Default: true
+
+  // Instantiate single shared SessionRecycler (one per scraper instance)
+  // If afterRequests is 0, SessionRecycler remains inert (legacy mode)
+  const sessionRecycler = new SessionRecycler(httpClient, afterRequests, logger);
+
   const extractCouponUseCase = new ExtractCouponProducts(
     httpClient, htmlParser, logger, userAgentProvider, retryPolicy, onBlocked,
     options?.delayMs, options?.paginationLimits,
+    sessionRecycler,
   );
   const fetchProductUseCase = new FetchProduct(
     httpClient, htmlParser, logger, userAgentProvider, retryPolicy, onBlocked,
+    sessionRecycler,
+    reactive,
   );
   const fetchPreSalesUseCase = new FetchPreSales(
     httpClient, htmlParser, logger, userAgentProvider, retryPolicy, onBlocked,
     options?.delayMs,
+    sessionRecycler,
   );
   const fetchIndividualCouponTermsUseCase = new FetchIndividualCouponTerms(
     httpClient, htmlParser, logger, userAgentProvider,
@@ -152,6 +201,7 @@ export function createScraper(options?: ScraperOptions): AmazonCouponScraper {
   const extractApplicableCouponUseCase = new ExtractApplicableCouponProducts(
     httpClient, htmlParser, logger, userAgentProvider, retryPolicy, fetchIndividualCouponTermsUseCase, onBlocked,
     options?.delayMs, options?.paginationLimits,
+    sessionRecycler,
   );
 
   return {

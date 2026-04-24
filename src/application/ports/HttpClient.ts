@@ -46,4 +46,30 @@ export interface HttpClient {
     options: { formEncoded: boolean },
     headers?: Record<string, string>,
   ): Promise<HttpResponse>;
+
+  /**
+   * Resets the HTTP session by discarding all accumulated cookies and creating
+   * a fresh session state. This operation is idempotent — calling it multiple times
+   * in sequence has no side effects beyond the first call.
+   *
+   * This method is optional and may not be implemented by all HttpClient instances
+   * (e.g., custom implementations provided by consumers). Call-sites that depend on
+   * session recycling must check for method availability: `if (typeof client.resetSession === 'function')`
+   *
+   * @remarks
+   * - Called by session recycling logic to mitigate progressive session degradation
+   *   observed with repeated requests to Amazon (e.g., empty titles, missing price blocks).
+   * - Default request headers and other client configuration persist after reset.
+   * - Emits a log entry at INFO level with key `'HTTP session recycled'`.
+   *
+   * @example
+   * ```typescript
+   * const client = createHttpClient();
+   * // ... perform requests ...
+   * if (typeof client.resetSession === 'function') {
+   *   client.resetSession(); // Start fresh session
+   * }
+   * ```
+   */
+  resetSession?(): void;
 }

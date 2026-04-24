@@ -7,6 +7,7 @@ import { HtmlParser } from '../ports/HtmlParser';
 import { Logger } from '../ports/Logger';
 import { RetryPolicy } from '../ports/RetryPolicy';
 import { UserAgentProvider } from '../ports/UserAgentProvider';
+import { SessionRecycler } from '../services/SessionRecycler';
 import { FetchIndividualCouponTerms } from './FetchIndividualCouponTerms';
 
 export interface DelayConfig {
@@ -64,23 +65,22 @@ export class ExtractApplicableCouponProducts {
   private readonly delayConfig: DelayConfig;
   private readonly maxProducts: number;
   private readonly maxPages: number;
-  private readonly userAgent: string;
 
   constructor(
     private readonly httpClient: HttpClient,
     private readonly htmlParser: HtmlParser,
     private readonly logger: Logger,
-    userAgentProvider: UserAgentProvider,
+    private readonly userAgentProvider: UserAgentProvider,
     private readonly retryPolicy: RetryPolicy,
     private readonly fetchIndividualCouponTerms: FetchIndividualCouponTerms,
     private readonly onBlocked?: (error: ScraperError) => Promise<void>,
     delayConfig?: DelayConfig,
     paginationLimits?: PaginationLimits,
+    private readonly sessionRecycler?: SessionRecycler,
   ) {
     this.delayConfig = delayConfig ?? { min: 1000, max: 2000 };
     this.maxProducts = paginationLimits?.maxProducts ?? 1_000;
     this.maxPages = paginationLimits?.maxPages ?? 500;
-    this.userAgent = userAgentProvider.get();
   }
 
   async execute(
@@ -157,7 +157,8 @@ export class ExtractApplicableCouponProducts {
 
     // Fetch coupon page to extract CSRF
     const productUrl = `${AMAZON_BASE_URL}/dp/${sourceAsin}`;
-    const headers = buildGetHeaders(this.userAgent, productUrl);
+    const userAgent = this.userAgentProvider.get();
+    const headers = buildGetHeaders(userAgent, productUrl);
 
     await this.randomDelay();
     let response: HttpResponse;
@@ -175,6 +176,9 @@ export class ExtractApplicableCouponProducts {
         expiresAt,
       };
     }
+
+    // Record the request for preventive session recycling
+    this.sessionRecycler?.recordRequest();
 
     await this.assertNoCaptcha(response);
 
@@ -241,7 +245,8 @@ export class ExtractApplicableCouponProducts {
       }
 
       const payload = this.buildProductListPayload(couponInfo, sourceAsin, csrfToken, sortId, isFirstPageLoad);
-      const headers = buildPostHeaders(this.userAgent, couponPageUrl);
+      const userAgent = this.userAgentProvider.get();
+      const headers = buildPostHeaders(userAgent, couponPageUrl);
 
       await this.randomDelay();
       let response: HttpResponse;
@@ -269,6 +274,9 @@ export class ExtractApplicableCouponProducts {
       }
 
       pageCount++;
+
+      // Record the request for preventive session recycling
+      this.sessionRecycler?.recordRequest();
 
       await this.assertNoCaptcha(response);
 

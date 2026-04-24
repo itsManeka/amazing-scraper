@@ -12,8 +12,8 @@ const SENSITIVE_COOKIE_NAMES = ['at-acbbr', 'session-token', 'sst-acbbr'];
  * Sensitive cookies are never logged.
  */
 export class AxiosHttpClient implements HttpClient {
-  private readonly client: AxiosInstance;
-  private readonly jar: CookieJar;
+  private client: AxiosInstance;
+  private jar: CookieJar;
 
   constructor(private readonly logger: Logger) {
     this.jar = new CookieJar();
@@ -78,6 +78,21 @@ export class AxiosHttpClient implements HttpClient {
     });
     this.logSafeCookies(url);
     return { status: response.status, data: response.data };
+  }
+
+  resetSession(): void {
+    this.jar = new CookieJar();
+    this.client = wrapper(
+      axios.create({
+        jar: this.jar,
+        withCredentials: true,
+        maxRedirects: 5,
+        validateStatus: () => true,
+        responseType: 'text',
+        transformResponse: [(data: string): string => data],
+      }),
+    );
+    this.logger.info('HTTP session recycled', {});
   }
 
   private logSafeCookies(url: string): void {

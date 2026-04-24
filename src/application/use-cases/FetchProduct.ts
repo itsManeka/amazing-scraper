@@ -1,5 +1,6 @@
 import { ProductPage } from '../../domain/entities';
 import { ScraperError } from '../../domain/errors';
+import { isDegradedProductPage } from '../../infrastructure/parsers/isDegradedProductPage';
 import { AMAZON_BASE_URL, CAPTCHA_MARKERS } from '../../infrastructure/http/amazonConstants';
 import { buildGetHeaders } from '../../infrastructure/http/buildHeaders';
 import { HttpClient, HttpResponse } from '../ports/HttpClient';
@@ -7,27 +8,28 @@ import { HtmlParser } from '../ports/HtmlParser';
 import { Logger } from '../ports/Logger';
 import { RetryPolicy } from '../ports/RetryPolicy';
 import { UserAgentProvider } from '../ports/UserAgentProvider';
+import { SessionRecycler } from '../services/SessionRecycler';
 
 /**
  * Fetches a single Amazon product page and extracts its structured data.
  * Does not follow coupon links or paginate — suitable for quick product lookups.
  */
 export class FetchProduct {
-  private readonly userAgent: string;
-
   constructor(
     private readonly httpClient: HttpClient,
     private readonly htmlParser: HtmlParser,
     private readonly logger: Logger,
-    userAgentProvider: UserAgentProvider,
+    private readonly userAgentProvider: UserAgentProvider,
     private readonly retryPolicy: RetryPolicy,
     private readonly onBlocked?: (error: ScraperError) => Promise<void>,
-  ) {
-    this.userAgent = userAgentProvider.get();
-  }
+    private readonly sessionRecycler?: SessionRecycler,
+    private readonly reactive: boolean = true,
+  ) {}
 
   /**
    * Fetches the product page for the given ASIN and returns extracted data.
+   * Implements reactive session recycling: if the page appears degraded (200 OK but missing
+   * critical data), resets the session and retries once with a fresh user agent.
    *
    * @throws {ScraperError} with code `"blocked"` when the request is blocked or returns a CAPTCHA.
    */
@@ -35,12 +37,50 @@ export class FetchProduct {
     const url = `${AMAZON_BASE_URL}/dp/${asin}`;
     this.logger.info('Fetching product page', { asin, url });
 
-    const headers = buildGetHeaders(this.userAgent);
+    const userAgent = this.userAgentProvider.get();
+    const headers = buildGetHeaders(userAgent);
     const response = await this.fetchWithRetry(url, headers);
 
     await this.assertNoCaptcha(response, url);
 
-    const page = this.htmlParser.extractProductInfo(response.data, asin, url, this.logger);
+    // T5: Reactive degrade detection — attempt retry with fresh session if degraded
+    let responseFinal = response;
+    if (this.reactive && isDegradedProductPage(response.data)) {
+      // FINDING 3: Only retry if resetSession is available (not sessionRecycler fallback)
+      if (typeof this.httpClient.resetSession === 'function') {
+        this.logger.warn('Page appears degraded — retrying with fresh session', { asin, url });
+
+        // Reset session
+        this.httpClient.resetSession();
+
+        // Reset the counter in sessionRecycler to prevent double-recycling
+        this.sessionRecycler?.resetCounter();
+
+        // Retry with fresh UA
+        const userAgentRetry = this.userAgentProvider.get();
+        const headersRetry = buildGetHeaders(userAgentRetry);
+        const responseRetry = await this.fetchWithRetry(url, headersRetry);
+
+        // FINDING 2: Check for CAPTCHA on retry response as well
+        await this.assertNoCaptcha(responseRetry, url);
+
+        // If retry is also degraded, proceed with parser (normal price_not_found flow)
+
+        responseFinal = responseRetry;
+      } else if (this.sessionRecycler) {
+        // sessionRecycler exists but resetSession is not available
+        this.logger.warn('Page appears degraded but resetSession is not available — skipping retry', {
+          asin,
+          url,
+          reason: 'HttpClient must implement resetSession for reactive retry',
+        });
+      }
+    }
+
+    // Record the request for preventive session recycling
+    this.sessionRecycler?.recordRequest();
+
+    const page = this.htmlParser.extractProductInfo(responseFinal.data, asin, url, this.logger);
     this.logger.info('Product page fetched', {
       asin,
       title: page.title,
