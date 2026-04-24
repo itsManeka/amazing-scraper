@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.16.0...v1.17.0) (2026-04-24)
+
+
+### Features
+
+* **scraper:** mitigate session degrade via recycling + reactive retry ([8afd4cd](https://github.com/itsmaneka/amazing-scraper/commit/8afd4cdd6ec5f34eef3d9cc7ba6c4c3239e4b5f2))
+
 # [1.16.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.15.0...v1.16.0) (2026-04-23)
 
 
