@@ -2,7 +2,7 @@ import { isDegradedProductPage } from '../../src/infrastructure/parsers/isDegrad
 
 describe('isDegradedProductPage', () => {
   describe('Happy path — degraded pages', () => {
-    it('returns true when all three conditions are met (no title, no productTitle, no prices)', () => {
+    it('returns true when both conditions are met (no productTitle, no prices)', () => {
       const degradedHtml = `
         <!DOCTYPE html>
         <html>
@@ -17,12 +17,12 @@ describe('isDegradedProductPage', () => {
       expect(isDegradedProductPage(degradedHtml)).toBe(true);
     });
 
-    it('returns true when title is generic "Amazon.com.br"', () => {
+    it('returns true when title is filled but productTitle is empty and no prices (real anti-bot scenario)', () => {
       const degradedHtml = `
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Amazon.com.br</title>
+            <title>The Boys Oversized Hardcover Omnibus Volume 3 | Amazon.com.br</title>
           </head>
           <body>
             <div id="pageContent"></div>
@@ -32,12 +32,12 @@ describe('isDegradedProductPage', () => {
       expect(isDegradedProductPage(degradedHtml)).toBe(true);
     });
 
-    it('returns true when title has extra whitespace around "Amazon.com.br"', () => {
+    it('returns true when title is generic "Amazon.com.br" with no productTitle or prices', () => {
       const degradedHtml = `
         <!DOCTYPE html>
         <html>
           <head>
-            <title>  Amazon.com.br  </title>
+            <title>Amazon.com.br</title>
           </head>
           <body>
             <div id="pageContent"></div>
@@ -155,7 +155,7 @@ describe('isDegradedProductPage', () => {
   });
 
   describe('Edge cases — single missing condition is NOT degraded', () => {
-    it('returns false when only title is missing (productTitle + price present)', () => {
+    it('returns false when productTitle is present (has at least one of two conditions)', () => {
       const edgeHtml = `
         <!DOCTYPE html>
         <html>
@@ -164,14 +164,14 @@ describe('isDegradedProductPage', () => {
           </head>
           <body>
             <h1 id="productTitle">Product with Title</h1>
-            <div id="priceblock_ourprice">R$ 49,90</div>
+            <div id="otherContent">No prices</div>
           </body>
         </html>
       `;
       expect(isDegradedProductPage(edgeHtml)).toBe(false);
     });
 
-    it('returns false when only productTitle is missing (title + price present)', () => {
+    it('returns false when only productTitle is missing but price is present (price present = not degraded)', () => {
       const edgeHtml = `
         <!DOCTYPE html>
         <html>
@@ -187,7 +187,7 @@ describe('isDegradedProductPage', () => {
       expect(isDegradedProductPage(edgeHtml)).toBe(false);
     });
 
-    it('returns false when only price is missing (title + productTitle present)', () => {
+    it('returns false when only price is missing but productTitle is present (productTitle present = not degraded)', () => {
       const edgeHtml = `
         <!DOCTYPE html>
         <html>
@@ -202,26 +202,10 @@ describe('isDegradedProductPage', () => {
       `;
       expect(isDegradedProductPage(edgeHtml)).toBe(false);
     });
-
-    it('returns false when title is present but generic (only one of three conditions fails)', () => {
-      const edgeHtml = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Amazon.com.br</title>
-          </head>
-          <body>
-            <h1 id="productTitle">Product Name</h1>
-            <div id="priceblock_ourprice">R$ 29,90</div>
-          </body>
-        </html>
-      `;
-      expect(isDegradedProductPage(edgeHtml)).toBe(false);
-    });
   });
 
   describe('Edge cases — whitespace and normalization', () => {
-    it('treats empty title the same as missing title', () => {
+    it('treats empty title the same as missing title (both degrade if productTitle + prices also missing)', () => {
       const emptyTitleHtml = `
         <!DOCTYPE html>
         <html>
@@ -236,7 +220,7 @@ describe('isDegradedProductPage', () => {
       expect(isDegradedProductPage(emptyTitleHtml)).toBe(true);
     });
 
-    it('trims whitespace from productTitle correctly', () => {
+    it('trims whitespace from productTitle correctly (whitespace-only = empty = counts as missing)', () => {
       const whitespaceHtml = `
         <!DOCTYPE html>
         <html>
@@ -252,19 +236,20 @@ describe('isDegradedProductPage', () => {
       expect(isDegradedProductPage(whitespaceHtml)).toBe(false);
     });
 
-    it('case-insensitive match for "Amazon.com.br" in title', () => {
-      const caseInsensitiveHtml = `
+    it('ignores title format entirely (filled or generic) if productTitle is present and prices exist', () => {
+      const mixedHtml = `
         <!DOCTYPE html>
         <html>
           <head>
             <title>amazon.com.br</title>
           </head>
           <body>
-            <div id="pageContent"></div>
+            <h1 id="productTitle">Real Product Name</h1>
+            <div id="priceblock_ourprice">R$ 50,00</div>
           </body>
         </html>
       `;
-      expect(isDegradedProductPage(caseInsensitiveHtml)).toBe(true);
+      expect(isDegradedProductPage(mixedHtml)).toBe(false);
     });
   });
 
