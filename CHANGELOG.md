@@ -1,3 +1,15 @@
+# [1.18.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.17.0...v1.18.0) (2026-04-24)
+
+
+### Bug Fixes
+
+* **parser:** drop <title> check from isDegradedProductPage heuristic ([4b36843](https://github.com/itsmaneka/amazing-scraper/commit/4b368437da35c1f20a41f963f84635e004690f50)), closes [#productTitle](https://github.com/itsmaneka/amazing-scraper/issues/productTitle) [#productTitle](https://github.com/itsmaneka/amazing-scraper/issues/productTitle) [#productTitle](https://github.com/itsmaneka/amazing-scraper/issues/productTitle)
+
+
+### Features
+
+* **FetchProduct:** add forensic degrade capture functionality ([a80d10a](https://github.com/itsmaneka/amazing-scraper/commit/a80d10a91b4ba6459cd65c6818630b23a2adb0f1))
+
 # [1.17.0](https://github.com/itsmaneka/amazing-scraper/compare/v1.16.0...v1.17.0) (2026-04-24)
 
 

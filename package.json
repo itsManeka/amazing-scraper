@@ -1,6 +1,6 @@
 {
   "name": "amazing-scraper",
-  "version": "1.17.0",
+  "version": "1.18.0",
   "description": "TypeScript library for scraping Amazon Brasil coupon product listings",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
