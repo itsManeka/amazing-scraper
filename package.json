@@ -49,6 +49,10 @@
   "publishConfig": {
     "access": "public"
   },
+  "overrides": {
+    "brace-expansion": "^5.0.5",
+    "ip-address": "^10.2.0"
+  },
   "lint-staged": {
     "src/**/*.ts": [
       "eslint --fix"
