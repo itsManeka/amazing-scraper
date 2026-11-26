@@ -37,12 +37,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/itsmaneka/amazing-scraper.git"
+    "url": "https://github.com/itsManeka/amazing-scraper.git"
   },
   "bugs": {
-    "url": "https://github.com/itsmaneka/amazing-scraper/issues"
+    "url": "https://github.com/itsManeka/amazing-scraper/issues"
   },
-  "homepage": "https://github.com/itsmaneka/amazing-scraper#readme",
+  "homepage": "https://github.com/itsManeka/amazing-scraper#readme",
   "engines": {
     "node": ">=20.0.0"
   },
