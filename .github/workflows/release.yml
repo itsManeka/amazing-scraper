@@ -8,6 +8,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write # npm Trusted Publishing (OIDC): publica sem NPM_TOKEN
 
 jobs:
   release:
@@ -25,6 +26,9 @@ jobs:
           node-version: 22.x
           cache: 'npm'
 
+      - name: Upgrade npm (Trusted Publishing exige npm >= 11.5.1)
+        run: npm install -g npm@^11.5.1
+
       - name: Install dependencies
         run: npm ci
 
@@ -35,4 +39,3 @@ jobs:
         run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
